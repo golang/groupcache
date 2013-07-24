@@ -35,6 +35,9 @@ type ProtoGetter interface {
 // PeerPicker is the interface that must be implemented to locate
 // the peer that owns a specific key.
 type PeerPicker interface {
+	// PickPeer returns the peer that owns the specific key
+	// and true to indicate that a remote peer was nominated.
+	// It returns nil, false if the key owner is the current peer.
 	PickPeer(key string) (peer ProtoGetter, ok bool)
 }
 
