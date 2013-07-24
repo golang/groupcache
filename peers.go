@@ -50,7 +50,7 @@ var (
 	portPicker func() PeerPicker
 )
 
-// RegisterInitPeers registers the peer initialization function.
+// RegisterPeerPicker registers the peer initialization function.
 // It is called once, when the first group is created.
 func RegisterPeerPicker(fn func() PeerPicker) {
 	if portPicker != nil {
