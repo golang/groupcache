@@ -56,7 +56,7 @@ In a nutshell, a groupcache lookup of **Get("foo")** looks like:
     from peers, they block waiting for the load to finish and get the
     same answer).  If not, RPC to the peer that's the owner and get
     the answer.  If the RPC fails, just load it locally (still with
-    local dup suppresion).
+    local dup suppression).
 
 ## Users
 
