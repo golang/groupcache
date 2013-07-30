@@ -54,7 +54,7 @@ var (
 // It is called once, when the first group is created.
 func RegisterPeerPicker(fn func() PeerPicker) {
 	if portPicker != nil {
-		panic("RegisterInitPeers called more than once")
+		panic("RegisterPeerPicker called more than once")
 	}
 	portPicker = fn
 }
