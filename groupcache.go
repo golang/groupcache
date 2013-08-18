@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	pb "github.com/golang/groupcache/groupcachepb"
 	"github.com/golang/groupcache/lru"
@@ -167,6 +168,11 @@ type Group struct {
 
 	// Stats are statistics on the group.
 	Stats Stats
+
+	// For expiration functionality.
+	expiration    time.Duration
+	stalePeriod   time.Duration
+	staleDeadline time.Duration
 }
 
 // Stats are per-group statistics.
@@ -203,33 +209,42 @@ func (g *Group) Get(ctx Context, key string, dest Sink) error {
 
 	if cacheHit {
 		g.Stats.CacheHits.Add(1)
+
+		if g.expiration > 0 {
+			return g.handleExpiration(ctx, key, dest, value)
+		}
+
 		return setSinkView(dest, value)
 	}
+	return g.loadOnMiss(ctx, key, dest, false)
+}
 
+func (g *Group) loadOnMiss(ctx Context, key string, dest Sink, expired bool) error {
 	// Optimization to avoid double unmarshalling or copying: keep
 	// track of whether the dest was already populated. One caller
 	// (if local) will set this; the losers will not. The common
 	// case will likely be one caller.
 	destPopulated := false
-	value, destPopulated, err := g.load(ctx, key, dest)
+	value, destPopulated, err := g.load(ctx, key, dest, expired)
 	if err != nil {
 		return err
 	}
 	if destPopulated {
 		return nil
 	}
+
 	return setSinkView(dest, value)
 }
 
 // load loads key either by invoking the getter locally or by sending it to another machine.
-func (g *Group) load(ctx Context, key string, dest Sink) (value ByteView, destPopulated bool, err error) {
+func (g *Group) load(ctx Context, key string, dest Sink, expired bool) (value ByteView, destPopulated bool, err error) {
 	g.Stats.Loads.Add(1)
 	viewi, err := g.loadGroup.Do(key, func() (interface{}, error) {
 		g.Stats.LoadsDeduped.Add(1)
 		var value ByteView
 		var err error
 		if peer, ok := g.peers.PickPeer(key); ok {
-			value, err = g.getFromPeer(ctx, peer, key)
+			value, err = g.getFromPeer(ctx, peer, key, expired)
 			if err == nil {
 				g.Stats.PeerLoads.Add(1)
 				return value, nil
@@ -264,7 +279,7 @@ func (g *Group) getLocally(ctx Context, key string, dest Sink) (ByteView, error)
 	return dest.view()
 }
 
-func (g *Group) getFromPeer(ctx Context, peer ProtoGetter, key string) (ByteView, error) {
+func (g *Group) getFromPeer(ctx Context, peer ProtoGetter, key string, expired bool) (ByteView, error) {
 	req := &pb.GetRequest{
 		Group: &g.name,
 		Key:   &key,
@@ -278,7 +293,9 @@ func (g *Group) getFromPeer(ctx Context, peer ProtoGetter, key string) (ByteView
 	// TODO(bradfitz): use res.MinuteQps or something smart to
 	// conditionally populate hotCache.  For now just do it some
 	// percentage of the time.
-	if rand.Intn(10) == 0 {
+	// If expired is true the value was previously in the hotCache, so must
+	// overwrite.
+	if expired || rand.Intn(10) == 0 {
 		g.populateCache(key, value, &g.hotCache)
 	}
 	return value, nil
