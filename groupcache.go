@@ -170,9 +170,10 @@ type Group struct {
 	Stats Stats
 
 	// For expiration functionality.
-	expiration    time.Duration
-	stalePeriod   time.Duration
-	staleDeadline time.Duration
+	expiration      time.Duration
+	stalePeriod     time.Duration
+	staleDeadline   time.Duration
+	disableHotCache bool
 }
 
 // Stats are per-group statistics.
@@ -191,6 +192,14 @@ type Stats struct {
 // Name returns the name of the group.
 func (g *Group) Name() string {
 	return g.name
+}
+
+// DisableHotCache disables writes to the cache used for non-owned cached items.
+// May be used with expiration functionality to prevent clients from getting
+// inconsistent data freshness due to unsynchronized clocks in a multi-peer
+// setup.  This cache is enabled by default.
+func (g *Group) DisableHotCache(disable bool) {
+	g.disableHotCache = disable
 }
 
 func (g *Group) initPeers() {
@@ -295,7 +304,7 @@ func (g *Group) getFromPeer(ctx Context, peer ProtoGetter, key string, expired b
 	// percentage of the time.
 	// If expired is true the value was previously in the hotCache, so must
 	// overwrite.
-	if expired || rand.Intn(10) == 0 {
+	if !g.disableHotCache && (expired || rand.Intn(10) == 0) {
 		g.populateCache(key, value, &g.hotCache)
 	}
 	return value, nil
