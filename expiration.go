@@ -77,21 +77,38 @@ func GetTime() int64 {
 //	  handleErr()
 //	}
 //
-func (g *Group) SetExpiration(d time.Duration) {
+func (g *Group) SetExpiration(d time.Duration) *Group {
 	g.expiration = d
+	return g
 }
 
 // SetStalePeriod sets the duration after expiration in which stale data may be served.
 // See SetExpiration() for details.  Internally this is truncated to seconds,
 // so it's not useful to set with greater precision.
-func (g *Group) SetStalePeriod(d time.Duration) {
+func (g *Group) SetStalePeriod(d time.Duration) *Group {
 	g.stalePeriod = d
+	return g
 }
 
 // SetStaleDeadline sets the deadline during the stale period for a background
 // reload after which stale data will be returned if fresh data is not ready.
-func (g *Group) SetStaleDeadline(d time.Duration) {
+func (g *Group) SetStaleDeadline(d time.Duration) *Group {
 	g.staleDeadline = d
+	return g
+}
+
+// SetDisableHotCache controls disabling of writes to the hotCache.  May be used
+// with expiration functionality to prevent clients from getting inconsistent
+// data freshness due to unsynchronized clocks in a multi-peer setup.  With the
+// hotCache disabled, there is only ever one server in a system where an item
+// may be cached (the authorative server for a given key).  With the hotCache
+// disabled, if the authoritative server for a given key goes down, its peers
+// will generate the value locally, but will not cache it (otherwise the value
+// would be generated locally and cached locally).  Writes to the hotCache are
+// enabled by default.
+func (g *Group) SetDisableHotCache(disable bool) *Group {
+	g.disableHotCache = disable
+	return g
 }
 
 func (g *Group) handleExpiration(ctx Context, key string, dest Sink, value ByteView) error {

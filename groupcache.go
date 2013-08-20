@@ -194,14 +194,6 @@ func (g *Group) Name() string {
 	return g.name
 }
 
-// DisableHotCache disables writes to the cache used for non-owned cached items.
-// May be used with expiration functionality to prevent clients from getting
-// inconsistent data freshness due to unsynchronized clocks in a multi-peer
-// setup.  This cache is enabled by default.
-func (g *Group) DisableHotCache(disable bool) {
-	g.disableHotCache = disable
-}
-
 func (g *Group) initPeers() {
 	if g.peers == nil {
 		g.peers = getPeers()
@@ -252,9 +244,10 @@ func (g *Group) load(ctx Context, key string, dest Sink, expired bool) (value By
 		g.Stats.LoadsDeduped.Add(1)
 		var value ByteView
 		var err error
+		var peerErr error
 		if peer, ok := g.peers.PickPeer(key); ok {
-			value, err = g.getFromPeer(ctx, peer, key, expired)
-			if err == nil {
+			value, peerErr = g.getFromPeer(ctx, peer, key, expired)
+			if peerErr == nil {
 				g.Stats.PeerLoads.Add(1)
 				return value, nil
 			}
@@ -271,7 +264,24 @@ func (g *Group) load(ctx Context, key string, dest Sink, expired bool) (value By
 		}
 		g.Stats.LocalLoads.Add(1)
 		destPopulated = true // only one caller of load gets this return value
-		g.populateCache(key, value, &g.mainCache)
+
+		// If expiration functionality is enabled, and if we locally generated a
+		// value owned by another server (because of peerErr), then we must store it
+		// in the hotCache instead of the mainCache so that it will be updated when
+		// we no longer get peerErr and the value expires.
+		//
+		// In getFromPeer() we always update the hotCache if an expired cache value
+		// comes from a remote owner.  Storing this remotely-owned value in the
+		// mainCache would be problematic, as we would never updated it if the owner
+		// stopped returning errors (because sucessfully remotely generated data is
+		// not written to mainCache).
+		if (peerErr != nil) && (g.expiration > 0) {
+			if !g.disableHotCache {
+				g.populateCache(key, value, &g.hotCache)
+			}
+		} else {
+			g.populateCache(key, value, &g.mainCache)
+		}
 		return value, nil
 	})
 	if err == nil {
