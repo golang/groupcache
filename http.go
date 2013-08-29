@@ -174,10 +174,10 @@ func (h *httpGetter) Get(context Context, in *pb.GetRequest, out *pb.GetResponse
 	if err != nil {
 		return err
 	}
+	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("server returned: %v", res.Status)
 	}
-	defer res.Body.Close()
 	// TODO: avoid this garbage.
 	b, err := ioutil.ReadAll(res.Body)
 	if err != nil {
