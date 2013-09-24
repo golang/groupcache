@@ -158,7 +158,7 @@ type Group struct {
 	// a hotCache avoids network hotspotting, where a peer's
 	// network card could become the bottleneck on a popular key.
 	// This cache is used sparingly to maximize the total number
-	// of key/value pairs that can stored globally.
+	// of key/value pairs that can be stored globally.
 	hotCache cache
 
 	// loadGroup ensures that each key is only fetched once
