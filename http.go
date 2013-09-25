@@ -18,7 +18,6 @@ package groupcache
 
 import (
 	"fmt"
-	"hash/crc32"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -26,12 +25,15 @@ import (
 	"sync"
 
 	"code.google.com/p/goprotobuf/proto"
-
+	"github.com/golang/groupcache/consistenthash"
 	pb "github.com/golang/groupcache/groupcachepb"
 )
 
 // TODO: make this configurable?
 const defaultBasePath = "/_groupcache/"
+
+// TODO: make this configurable as well.
+const defaultReplicas = 3
 
 // HTTPPool implements PeerPicker for a pool of HTTP peers.
 type HTTPPool struct {
@@ -52,7 +54,7 @@ type HTTPPool struct {
 	self string
 
 	mu    sync.Mutex
-	peers []string
+	peers *consistenthash.Map
 }
 
 var httpPoolMade bool
@@ -67,7 +69,7 @@ func NewHTTPPool(self string) *HTTPPool {
 		panic("groupcache: NewHTTPPool must be called only once")
 	}
 	httpPoolMade = true
-	p := &HTTPPool{basePath: defaultBasePath, self: self}
+	p := &HTTPPool{basePath: defaultBasePath, self: self, peers: consistenthash.New(defaultReplicas, nil)}
 	RegisterPeerPicker(func() PeerPicker { return p })
 	http.Handle(defaultBasePath, p)
 	return p
@@ -79,22 +81,17 @@ func NewHTTPPool(self string) *HTTPPool {
 func (p *HTTPPool) Set(peers ...string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.peers = append([]string{}, peers...)
+	p.peers = consistenthash.New(defaultReplicas, nil)
+	p.peers.Add(peers...)
 }
 
 func (p *HTTPPool) PickPeer(key string) (ProtoGetter, bool) {
-	// TODO: make checksum implementation pluggable
-	h := crc32.Checksum([]byte(key), crc32.IEEETable)
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if len(p.peers) == 0 {
+	if p.peers.IsEmpty() {
 		return nil, false
 	}
-	n := int(h)
-	if n < 0 {
-		n *= -1
-	}
-	if peer := p.peers[n%len(p.peers)]; peer != p.self {
+	if peer := p.peers.Get(key); peer != p.self {
 		// TODO: pre-build a slice of *httpGetter when Set()
 		// is called to avoid these two allocations.
 		return &httpGetter{p.Transport, peer + p.basePath}, true
