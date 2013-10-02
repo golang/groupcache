@@ -84,7 +84,7 @@ func TestHTTPPool(t *testing.T) {
 
 	// Dummy getter function. Gets should go to children only.
 	// The only time this process will handle a get is when the
-	// children can't be contacted for seome reason.
+	// children can't be contacted for some reason.
 	getter := GetterFunc(func(ctx Context, key string, dest Sink) error {
 		return errors.New("parent getter called; something's wrong")
 	})
