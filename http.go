@@ -130,6 +130,8 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if p.Context != nil {
 		ctx = p.Context(r)
 	}
+
+	group.Stats.ServerRequests.Add(1)
 	var value []byte
 	err = group.Get(ctx, key, AllocatingByteSliceSink(&value))
 	if err != nil {
