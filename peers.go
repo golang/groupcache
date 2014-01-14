@@ -19,7 +19,7 @@ limitations under the License.
 package groupcache
 
 import (
-	pb "github.com/golang/groupcache/groupcachepb"
+	pb "github.com/VividCortex/groupcache/groupcachepb"
 )
 
 // Context is an opaque value passed through calls to the

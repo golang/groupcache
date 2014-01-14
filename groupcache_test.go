@@ -28,10 +28,10 @@ import (
 	"testing"
 	"time"
 
-	"code.google.com/p/goprotobuf/proto"
+	"github.com/VividCortex/goprotobuf/proto"
 
-	pb "github.com/golang/groupcache/groupcachepb"
-	testpb "github.com/golang/groupcache/testpb"
+	pb "github.com/VividCortex/groupcache/groupcachepb"
+	testpb "github.com/VividCortex/groupcache/testpb"
 )
 
 var (
