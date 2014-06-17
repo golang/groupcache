@@ -69,13 +69,13 @@ func (m *Map) Get(key string) string {
 
 	hash := int(m.hash([]byte(key)))
 
-	// Linear search for appropriate replica.
-	for _, v := range m.keys {
-		if v >= hash {
-			return m.hashMap[v]
-		}
-	}
+	// Binary search for appropriate replica.
+	idx := sort.Search(len(m.keys), func(i int) bool { return m.keys[i] >= hash })
 
 	// Means we have cycled back to the first replica.
-	return m.hashMap[m.keys[0]]
+	if idx == len(m.keys) {
+		idx = 0
+	}
+
+	return m.hashMap[m.keys[idx]]
 }
