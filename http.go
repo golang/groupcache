@@ -33,7 +33,7 @@ import (
 const defaultBasePath = "/_groupcache/"
 
 // TODO: make this configurable as well.
-const defaultReplicas = 3
+const defaultReplicas = 50
 
 // HTTPPool implements PeerPicker for a pool of HTTP peers.
 type HTTPPool struct {
