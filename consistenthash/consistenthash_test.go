@@ -93,7 +93,7 @@ func BenchmarkGet512(b *testing.B) { benchmarkGet(b, 512) }
 
 func benchmarkGet(b *testing.B, shards int) {
 
-	hash := New(shards, nil)
+	hash := New(50, nil)
 
 	var buckets []string
 	for i := 0; i < shards; i++ {
