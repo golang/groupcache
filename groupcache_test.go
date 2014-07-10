@@ -30,8 +30,8 @@ import (
 
 	"code.google.com/p/goprotobuf/proto"
 
-	pb "github.com/golang/groupcache/groupcachepb"
-	testpb "github.com/golang/groupcache/testpb"
+	pb "github.com/EverythingMe/groupcache/groupcachepb"
+	testpb "github.com/EverythingMe/groupcache/testpb"
 )
 
 var (

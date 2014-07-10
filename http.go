@@ -25,8 +25,8 @@ import (
 	"sync"
 
 	"code.google.com/p/goprotobuf/proto"
-	"github.com/golang/groupcache/consistenthash"
-	pb "github.com/golang/groupcache/groupcachepb"
+	"github.com/EverythingMe/groupcache/consistenthash"
+	pb "github.com/EverythingMe/groupcache/groupcachepb"
 )
 
 // TODO: make this configurable?
@@ -65,14 +65,32 @@ var httpPoolMade bool
 // The self argument be a valid base URL that points to the current server,
 // for example "http://example.net:8000".
 func NewHTTPPool(self string) *HTTPPool {
+
+	// call the basepath specific variation with the default base path
+	return NewHTTPPoolBasePath(self, defaultBasePath)
+}
+
+// NewHTTPPoolBasePath initializes an HTTP pool of peers just as NewHTTPPool,
+// but uses a custom base path to accept requests on (the default is /_groupcache/).
+// The basePath should look something like /mypath/.
+// See the documentation on http.ServeMux for details on path consturciton
+// (http://golang.org/pkg/net/http/#ServeMux).
+// Note that you need to set this the same on all peers in the pool.
+func NewHTTPPoolBasePath(self, basePath string) *HTTPPool {
 	if httpPoolMade {
 		panic("groupcache: NewHTTPPool must be called only once")
 	}
 	httpPoolMade = true
-	p := &HTTPPool{basePath: defaultBasePath, self: self, peers: consistenthash.New(defaultReplicas, nil)}
+	p := &HTTPPool{basePath: basePath, self: self, peers: consistenthash.New(defaultReplicas, nil)}
 	RegisterPeerPicker(func() PeerPicker { return p })
-	http.Handle(defaultBasePath, p)
+	http.Handle(basePath, p)
 	return p
+}
+
+// Get the base path of the pool's http server. This is useful if you want to wrap groupcache
+// inside another http handler.
+func (p *HTTPPool) GetBasePath() string {
+	return p.basePath
 }
 
 // Set updates the pool's list of peers.

@@ -82,6 +82,11 @@ func TestHTTPPool(t *testing.T) {
 	p := NewHTTPPool("should-be-ignored")
 	p.Set(addrToURL(childAddr)...)
 
+	//test base path getter
+	if p.GetBasePath() != defaultBasePath {
+		t.Fatalf("Default basepath should be %s, got %s", defaultBasePath, p.GetBasePath())
+	}
+
 	// Dummy getter function. Gets should go to children only.
 	// The only time this process will handle a get is when the
 	// children can't be contacted for some reason.
