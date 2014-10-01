@@ -29,10 +29,8 @@ import (
 	pb "github.com/golang/groupcache/groupcachepb"
 )
 
-// TODO: make this configurable?
 const defaultBasePath = "/_groupcache/"
 
-// TODO: make this configurable as well.
 const defaultReplicas = 50
 
 // HTTPPool implements PeerPicker for a pool of HTTP peers.
@@ -57,21 +55,59 @@ type HTTPPool struct {
 	peers *consistenthash.Map
 }
 
-var httpPoolMade bool
+// HTTPPoolOptions are the configurations of a HTTPPool.
+type HTTPPoolOptions struct {
+	// BasePath specifies the HTTP path that will serve groupcache requests.
+	// If blank, it defaults to "/_groupcache/".
+	BasePath string
 
-// NewHTTPPool initializes an HTTP pool of peers.
-// It registers itself as a PeerPicker and as an HTTP handler with the
-// http.DefaultServeMux.
+	// Replicas specifies the number of key replicas on the consistent hash.
+	// If blank, it defaults to 50.
+	Replicas int
+
+	// HashFn specifies the hash function of the consistent hash.
+	// If blank, it defaults to crc32.ChecksumIEEE.
+	HashFn consistenthash.Hash
+}
+
+// NewHTTPPool initializes an HTTP pool of peers, and registers itself as a PeerPicker.
+// For convenience, it also registers itself as an http.Handler with http.DefaultServeMux.
 // The self argument be a valid base URL that points to the current server,
 // for example "http://example.net:8000".
 func NewHTTPPool(self string) *HTTPPool {
+	p := NewHTTPPoolOpts(self, nil)
+	http.Handle(p.basePath, p)
+	return p
+}
+
+var httpPoolMade bool
+
+// NewHTTPPoolOpts initializes an HTTP pool of peers with the given options.
+// Unlike NewHTTPPool, this function does not register the created pool as an HTTP handler.
+// The returned *HTTPPool implements http.Handler and must be registered using http.Handle.
+func NewHTTPPoolOpts(self string, o *HTTPPoolOptions) *HTTPPool {
 	if httpPoolMade {
 		panic("groupcache: NewHTTPPool must be called only once")
 	}
 	httpPoolMade = true
-	p := &HTTPPool{basePath: defaultBasePath, self: self, peers: consistenthash.New(defaultReplicas, nil)}
+
+	opts := HTTPPoolOptions{}
+	if o != nil {
+		opts = *o
+	}
+	if opts.BasePath == "" {
+		opts.BasePath = defaultBasePath
+	}
+	if opts.Replicas == 0 {
+		opts.Replicas = defaultReplicas
+	}
+
+	p := &HTTPPool{
+		basePath: opts.BasePath,
+		self:     self,
+		peers:    consistenthash.New(opts.Replicas, opts.HashFn),
+	}
 	RegisterPeerPicker(func() PeerPicker { return p })
-	http.Handle(defaultBasePath, p)
 	return p
 }
 
