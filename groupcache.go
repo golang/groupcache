@@ -380,6 +380,10 @@ func (c *cache) add(key string, value ByteView) {
 				c.nbytes -= int64(len(key.(string))) + int64(val.Len())
 				c.nevict++
 			},
+			OnOverWritten: func(oldValue interface{}, newValue interface{}) {
+				val := oldValue.(ByteView)
+				c.nbytes -= int64(len(key.(string))) + int64(val.Len())
+			},
 		}
 	}
 	c.lru.Add(key, value)
