@@ -54,9 +54,9 @@ func (g *Group) Do(key string, fn func() (interface{}, error)) (interface{}, err
 	g.mu.Unlock()
 
 	c.val, c.err = fn()
-	c.wg.Done()
 
 	g.mu.Lock()
+	c.wg.Done()
 	delete(g.m, key)
 	g.mu.Unlock()
 
