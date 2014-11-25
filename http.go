@@ -24,9 +24,9 @@ import (
 	"strings"
 	"sync"
 
-	"code.google.com/p/goprotobuf/proto"
 	"github.com/golang/groupcache/consistenthash"
 	pb "github.com/golang/groupcache/groupcachepb"
+	"github.com/golang/protobuf/proto"
 )
 
 const defaultBasePath = "/_groupcache/"

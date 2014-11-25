@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"code.google.com/p/goprotobuf/proto"
+	"github.com/golang/protobuf/proto"
 
 	pb "github.com/golang/groupcache/groupcachepb"
 	testpb "github.com/golang/groupcache/testpb"
