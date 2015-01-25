@@ -45,7 +45,7 @@ func TestDoErr(t *testing.T) {
 		return nil, someErr
 	})
 	if err != someErr {
-		t.Errorf("Do error = %v; want someErr", err, someErr)
+		t.Errorf("Do error = %v; want someErr", err)
 	}
 	if v != nil {
 		t.Errorf("unexpected non-nil value %#v", v)
