@@ -36,9 +36,9 @@ type Cache struct {
 // A Key may be any value that is comparable. See http://golang.org/ref/spec#Comparison_operators
 type Key interface{}
 
-type entry struct {
-	key   Key
-	value interface{}
+type Entry struct {
+	Key   Key
+	Value interface{}
 }
 
 // New creates a new Cache.
@@ -60,10 +60,10 @@ func (c *Cache) Add(key Key, value interface{}) {
 	}
 	if ee, ok := c.cache[key]; ok {
 		c.ll.MoveToFront(ee)
-		ee.Value.(*entry).value = value
+		ee.Value.(*Entry).Value = value
 		return
 	}
-	ele := c.ll.PushFront(&entry{key, value})
+	ele := c.ll.PushFront(&Entry{key, value})
 	c.cache[key] = ele
 	if c.MaxEntries != 0 && c.ll.Len() > c.MaxEntries {
 		c.RemoveOldest()
@@ -77,7 +77,7 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 	}
 	if ele, hit := c.cache[key]; hit {
 		c.ll.MoveToFront(ele)
-		return ele.Value.(*entry).value, true
+		return ele.Value.(*Entry).Value, true
 	}
 	return
 }
@@ -105,10 +105,10 @@ func (c *Cache) RemoveOldest() {
 
 func (c *Cache) removeElement(e *list.Element) {
 	c.ll.Remove(e)
-	kv := e.Value.(*entry)
-	delete(c.cache, kv.key)
+	kv := e.Value.(*Entry)
+	delete(c.cache, kv.Key)
 	if c.OnEvicted != nil {
-		c.OnEvicted(kv.key, kv.value)
+		c.OnEvicted(kv.Key, kv.Value)
 	}
 }
 
@@ -118,4 +118,15 @@ func (c *Cache) Len() int {
 		return 0
 	}
 	return c.ll.Len()
+}
+
+// Return all of the entries currently in the cache
+func (c *Cache) Entries() (entries []*Entry) {
+	entries = make([]*Entry, len(c.cache))
+	ix := 0
+	for k, ele := range c.cache {
+		entries[ix] = &Entry{k, ele.Value.(*Entry).Value}
+		ix++
+	}
+	return
 }
