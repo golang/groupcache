@@ -1,0 +1,4 @@
+origin	git@github.com:skyportsystems/groupcache (fetch)
+origin	git@github.com:skyportsystems/groupcache (push)
+upstream	https://github.com/golang/groupcache.git (fetch)
+upstream	https://github.com/golang/groupcache.git (push)
