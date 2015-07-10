@@ -206,7 +206,10 @@ func (h *httpGetter) Get(context Context, in *pb.GetRequest, out *pb.GetResponse
 	if h.transport != nil {
 		tr = h.transport(context)
 	}
-	res, err := tr.RoundTrip(req)
+	client := &http.Client{
+		Transport: tr,
+	}
+	res, err := client.Do(req)
 	if err != nil {
 		return err
 	}
