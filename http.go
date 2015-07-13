@@ -145,13 +145,16 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(r.URL.Path, p.basePath) {
 		panic("HTTPPool serving unexpected path: " + r.URL.Path)
 	}
-	parts := strings.SplitN(r.URL.Path[len(p.basePath):], "/", 2)
-	if len(parts) != 2 {
-		http.Error(w, "bad request", http.StatusBadRequest)
+	groupName := r.FormValue("group")
+	key := r.FormValue("key")
+	if groupName == "" {
+		http.Error(w, "group name need specfied", http.StatusBadRequest)
 		return
 	}
-	groupName := parts[0]
-	key := parts[1]
+	if key == "" {
+		http.Error(w, "key name need specfied", http.StatusBadRequest)
+		return
+	}
 
 	// Fetch the value for this group/key.
 	group := GetGroup(groupName)
@@ -192,13 +195,16 @@ var bufferPool = sync.Pool{
 }
 
 func (h *httpGetter) Get(context Context, in *pb.GetRequest, out *pb.GetResponse) error {
-	u := fmt.Sprintf(
-		"%v%v/%v",
-		h.baseURL,
-		url.QueryEscape(in.GetGroup()),
-		url.QueryEscape(in.GetKey()),
-	)
-	req, err := http.NewRequest("GET", u, nil)
+	u, err := url.Parse(h.baseURL)
+	if err != nil {
+		return err
+	}
+	query := u.Query()
+	query.Set("group", in.GetGroup())
+	query.Set("key", in.GetKey())
+	u.RawQuery = query.Encode()
+
+	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return err
 	}
