@@ -105,7 +105,7 @@ func TestHTTPPool(t *testing.T) {
 func testKeys(n int) (keys []string) {
 	keys = make([]string, n)
 	for i := range keys {
-		keys[i] = strconv.Itoa(i)
+		keys[i] = "/" + strconv.Itoa(i)
 	}
 	return
 }
@@ -122,7 +122,7 @@ func beChildForTestHTTPPool() {
 	})
 	NewGroup("httpPoolTest", 1<<20, getter)
 
-	log.Fatal(http.ListenAndServe(addrs[*peerIndex], p))
+	log.Fatal(http.ListenAndServe(addrs[*peerIndex], nil))
 }
 
 // This is racy. Another process could swoop in and steal the port between the
