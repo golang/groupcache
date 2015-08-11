@@ -42,10 +42,13 @@ type Sink interface {
 	view() (ByteView, error)
 }
 
+// I have to change this code
+// The origin func cost too much memory
 func cloneBytes(b []byte) []byte {
-	c := make([]byte, len(b))
-	copy(c, b)
-	return c
+	return b
+	//c := make([]byte, len(b))
+	//copy(c, b)
+	//return c
 }
 
 func setSinkView(s Sink, v ByteView) error {
