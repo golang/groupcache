@@ -1,26 +1,11 @@
-/*
-Copyright 2013 Google Inc.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-package groupcache
+package grpc
 
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"log"
-	"net/http"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -28,18 +13,21 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/golang/groupcache"
+	pb3 "github.com/golang/groupcache/grpc/groupcachepb3"
 	test "github.com/golang/groupcache/test"
+	"google.golang.org/grpc"
 )
 
 var (
-	peerAddrs = flag.String("test_peer_addrs", "", "Comma-separated list of peer addresses; used by TestHTTPPool")
-	peerIndex = flag.Int("test_peer_index", -1, "Index of which peer this child is; used by TestHTTPPool")
-	peerChild = flag.Bool("test_peer_child", false, "True if running as a child process; used by TestHTTPPool")
+	peerAddrs = flag.String("test_peer_addrs", "", "Comma-separated list of peer addresses; used by TestGRPCPool")
+	peerIndex = flag.Int("test_peer_index", -1, "Index of which peer this child is; used by TestGRPCPool")
+	peerChild = flag.Bool("test_peer_child", false, "True if running as a child process; used by TestGRPCPool")
 )
 
-func TestHTTPPool(t *testing.T) {
+func TestGPRCPool(t *testing.T) {
 	if *peerChild {
-		beChildForTestHTTPPool()
+		beChildForTestGRPCPool()
 		os.Exit(0)
 	}
 
@@ -57,7 +45,7 @@ func TestHTTPPool(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < nChild; i++ {
 		cmd := exec.Command(os.Args[0],
-			"--test.run=TestHTTPPool",
+			"--test.run=TestGPRCPool",
 			"--test_peer_child",
 			"--test_peer_addrs="+strings.Join(childAddr, ","),
 			"--test_peer_index="+strconv.Itoa(i),
@@ -79,20 +67,20 @@ func TestHTTPPool(t *testing.T) {
 	wg.Wait()
 
 	// Use a dummy self address so that we don't handle gets in-process.
-	p := NewHTTPPool("should-be-ignored")
-	p.Set(addrToURL(childAddr)...)
+	p := NewPool("should-be-ignored")
+	p.Set(childAddr...)
 
 	// Dummy getter function. Gets should go to children only.
 	// The only time this process will handle a get is when the
 	// children can't be contacted for some reason.
-	getter := GetterFunc(func(ctx Context, key string, dest Sink) error {
+	getter := groupcache.GetterFunc(func(ctx groupcache.Context, key string, dest groupcache.Sink) error {
 		return errors.New("parent getter called; something's wrong")
 	})
-	g := NewGroup("httpPoolTest", 1<<20, getter)
+	g := NewGroup("grpcPoolTest", 1<<20, getter)
 
 	for _, key := range testKeys(nGets) {
 		var value string
-		if err := g.Get(nil, key, StringSink(&value)); err != nil {
+		if err := g.Get(nil, key, groupcache.StringSink(&value)); err != nil {
 			t.Fatal(err)
 		}
 		if suffix := ":" + key; !strings.HasSuffix(value, suffix) {
@@ -100,29 +88,32 @@ func TestHTTPPool(t *testing.T) {
 		}
 		t.Logf("Get key=%q, value=%q (peer:key)", key, value)
 	}
+	// TODO: do we need to shutdown gracefully?
 }
 
-func testKeys(n int) (keys []string) {
-	keys = make([]string, n)
-	for i := range keys {
-		keys[i] = strconv.Itoa(i)
-	}
-	return
-}
-
-func beChildForTestHTTPPool() {
+func beChildForTestGRPCPool() {
 	addrs := strings.Split(*peerAddrs, ",")
+	myAddr := addrs[*peerIndex]
+	_, port, err := net.SplitHostPort(myAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	p := NewHTTPPool("http://" + addrs[*peerIndex])
-	p.Set(addrToURL(addrs)...)
-
-	getter := GetterFunc(func(ctx Context, key string, dest Sink) error {
+	g := NewPool(myAddr)
+	g.Set(addrs...)
+	getter := groupcache.GetterFunc(func(ctx groupcache.Context, key string, dest groupcache.Sink) error {
 		dest.SetString(strconv.Itoa(*peerIndex) + ":" + key)
 		return nil
 	})
-	NewGroup("httpPoolTest", 1<<20, getter)
+	groupcache.NewGroup("grpcPoolTest", 1<<20, getter)
 
-	log.Fatal(http.ListenAndServe(addrs[*peerIndex], p))
+	grpcServer := grpc.NewServer()
+	pb3.RegisterGroupCacheServer(grpcServer, g)
+	grpcServer.Serve(lis)
 }
 
 func pickFreeAddr(t *testing.T) string {
@@ -133,16 +124,16 @@ func pickFreeAddr(t *testing.T) string {
 	return addr
 }
 
-func addrToURL(addr []string) []string {
-	url := make([]string, len(addr))
-	for i := range addr {
-		url[i] = "http://" + addr[i]
-	}
-	return url
-}
-
 func awaitAddrReady(t *testing.T, addr string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	test.AwaitAddrReady(addr)
+}
+
+func testKeys(n int) (keys []string) {
+	keys = make([]string, n)
+	for i := range keys {
+		keys[i] = strconv.Itoa(i)
+	}
+	return
 }
