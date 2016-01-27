@@ -100,6 +100,7 @@ func newGroup(name string, cacheBytes int64, getter Getter, peers PeerPicker) *G
 		getter:     getter,
 		peers:      peers,
 		cacheBytes: cacheBytes,
+		loadGroup:  &singleflight.Group{},
 	}
 	if fn := newGroupHook; fn != nil {
 		fn(g)
@@ -163,10 +164,18 @@ type Group struct {
 	// loadGroup ensures that each key is only fetched once
 	// (either locally or remotely), regardless of the number of
 	// concurrent callers.
-	loadGroup singleflight.Group
+	loadGroup flightGroup
 
 	// Stats are statistics on the group.
 	Stats Stats
+}
+
+// flightGroup is defined as an interface which flightgroup.Group
+// satisfies.  We define this so that we may test with an alternate
+// implementation.
+type flightGroup interface {
+	// Done is called when Do is done.
+	Do(key string, fn func() (interface{}, error)) (interface{}, error)
 }
 
 // Stats are per-group statistics.
@@ -225,6 +234,31 @@ func (g *Group) Get(ctx Context, key string, dest Sink) error {
 func (g *Group) load(ctx Context, key string, dest Sink) (value ByteView, destPopulated bool, err error) {
 	g.Stats.Loads.Add(1)
 	viewi, err := g.loadGroup.Do(key, func() (interface{}, error) {
+		// Check the cache again because singleflight can only dedup calls
+		// that overlap concurrently.  It's possible for 2 concurrent
+		// requests to miss the cache, resulting in 2 load() calls.  An
+		// unfortunate goroutine scheduling would result in this callback
+		// being run twice, serially.  If we don't check the cache again,
+		// cache.nbytes would be incremented below even though there will
+		// be only one entry for this key.
+		//
+		// Consider the following serialized event ordering for two
+		// goroutines in which this callback gets called twice for hte
+		// same key:
+		// 1: Get("key")
+		// 2: Get("key")
+		// 1: lookupCache("key")
+		// 2: lookupCache("key")
+		// 1: load("key")
+		// 2: load("key")
+		// 1: loadGroup.Do("key", fn)
+		// 1: fn()
+		// 2: loadGroup.Do("key", fn)
+		// 2: fn()
+		if value, cacheHit := g.lookupCache(key); cacheHit {
+			g.Stats.CacheHits.Add(1)
+			return value, nil
+		}
 		g.Stats.LoadsDeduped.Add(1)
 		var value ByteView
 		var err error
