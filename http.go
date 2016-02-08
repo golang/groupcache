@@ -46,11 +46,11 @@ type HTTPPool struct {
 	// If nil, the client uses http.DefaultTransport.
 	Transport func(Context) http.RoundTripper
 
-	// base path including leading and trailing slash, e.g. "/_groupcache/"
-	basePath string
-
 	// this peer's base URL, e.g. "https://example.net:8000"
 	self string
+
+	// opts specifies the options.
+	opts HTTPPoolOptions
 
 	mu          sync.Mutex // guards peers and httpGetters
 	peers       *consistenthash.Map
@@ -78,7 +78,7 @@ type HTTPPoolOptions struct {
 // for example "http://example.net:8000".
 func NewHTTPPool(self string) *HTTPPool {
 	p := NewHTTPPoolOpts(self, nil)
-	http.Handle(p.basePath, p)
+	http.Handle(p.opts.BasePath, p)
 	return p
 }
 
@@ -93,23 +93,21 @@ func NewHTTPPoolOpts(self string, o *HTTPPoolOptions) *HTTPPool {
 	}
 	httpPoolMade = true
 
-	opts := HTTPPoolOptions{}
-	if o != nil {
-		opts = *o
-	}
-	if opts.BasePath == "" {
-		opts.BasePath = defaultBasePath
-	}
-	if opts.Replicas == 0 {
-		opts.Replicas = defaultReplicas
-	}
-
 	p := &HTTPPool{
-		basePath:    opts.BasePath,
 		self:        self,
-		peers:       consistenthash.New(opts.Replicas, opts.HashFn),
 		httpGetters: make(map[string]*httpGetter),
 	}
+	if o != nil {
+		p.opts = *o
+	}
+	if p.opts.BasePath == "" {
+		p.opts.BasePath = defaultBasePath
+	}
+	if p.opts.Replicas == 0 {
+		p.opts.Replicas = defaultReplicas
+	}
+	p.peers = consistenthash.New(p.opts.Replicas, p.opts.HashFn)
+
 	RegisterPeerPicker(func() PeerPicker { return p })
 	return p
 }
@@ -120,11 +118,11 @@ func NewHTTPPoolOpts(self string, o *HTTPPoolOptions) *HTTPPool {
 func (p *HTTPPool) Set(peers ...string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.peers = consistenthash.New(defaultReplicas, nil)
+	p.peers = consistenthash.New(p.opts.Replicas, p.opts.HashFn)
 	p.peers.Add(peers...)
 	p.httpGetters = make(map[string]*httpGetter, len(peers))
 	for _, peer := range peers {
-		p.httpGetters[peer] = &httpGetter{transport: p.Transport, baseURL: peer + p.basePath}
+		p.httpGetters[peer] = &httpGetter{transport: p.Transport, baseURL: peer + p.opts.BasePath}
 	}
 }
 
@@ -142,10 +140,10 @@ func (p *HTTPPool) PickPeer(key string) (ProtoGetter, bool) {
 
 func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Parse request.
-	if !strings.HasPrefix(r.URL.Path, p.basePath) {
+	if !strings.HasPrefix(r.URL.Path, p.opts.BasePath) {
 		panic("HTTPPool serving unexpected path: " + r.URL.Path)
 	}
-	parts := strings.SplitN(r.URL.Path[len(p.basePath):], "/", 2)
+	parts := strings.SplitN(r.URL.Path[len(p.opts.BasePath):], "/", 2)
 	if len(parts) != 2 {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
