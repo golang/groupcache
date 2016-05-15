@@ -146,13 +146,13 @@ type Group struct {
 	cacheBytes int64 // limit for sum of mainCache and hotCache size
 
 	// mainCache is a cache of the keys for which this process
-	// (amongst its peers) is authorative. That is, this cache
+	// (amongst its peers) is authoritative. That is, this cache
 	// contains keys which consistent hash on to this process's
 	// peer number.
 	mainCache cache
 
 	// hotCache contains keys/values for which this peer is not
-	// authorative (otherwise they would be in mainCache), but
+	// authoritative (otherwise they would be in mainCache), but
 	// are popular enough to warrant mirroring in this process to
 	// avoid going over the network to fetch from a peer.  Having
 	// a hotCache avoids network hotspotting, where a peer's
