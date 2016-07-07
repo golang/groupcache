@@ -26,6 +26,7 @@ package groupcache
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -81,13 +82,17 @@ func GetGroup(name string) *Group {
 //
 // The group name must be unique for each getter.
 func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
-	return newGroup(name, cacheBytes, getter, nil)
+	return newGroup(name, cacheBytes, getter, nil, false)
+}
+
+func NewReadOnlyGroup(name string, cacheBytes int64) *Group {
+	return newGroup(name, cacheBytes, nil, nil, true)
 }
 
 // If peers is nil, the peerPicker is called via a sync.Once to initialize it.
-func newGroup(name string, cacheBytes int64, getter Getter, peers PeerPicker) *Group {
-	if getter == nil {
-		panic("nil Getter")
+func newGroup(name string, cacheBytes int64, getter Getter, peers PeerPicker, readOnly bool) *Group {
+	if getter == nil && !readOnly {
+		panic("nil Getter in non read-only cache")
 	}
 	mu.Lock()
 	defer mu.Unlock()
@@ -97,6 +102,7 @@ func newGroup(name string, cacheBytes int64, getter Getter, peers PeerPicker) *G
 	}
 	g := &Group{
 		name:       name,
+		readOnly:   readOnly,
 		getter:     getter,
 		peers:      peers,
 		cacheBytes: cacheBytes,
@@ -139,6 +145,7 @@ func callInitPeerServer() {
 // a group of 1 or more machines.
 type Group struct {
 	name       string
+	readOnly   bool
 	getter     Getter
 	peersOnce  sync.Once
 	peers      PeerPicker
@@ -233,12 +240,17 @@ func (g *Group) load(ctx Context, key string, dest Sink) (value ByteView, destPo
 			if err == nil {
 				g.Stats.PeerLoads.Add(1)
 				return value, nil
+			} else if g.readOnly {
+				return nil, fmt.Errorf("Read-only cache cannot load locally after peer error: %v", err)
 			}
 			g.Stats.PeerErrors.Add(1)
 			// TODO(bradfitz): log the peer's error? keep
 			// log of the past few for /groupcachez?  It's
 			// probably boring (normal task movement), so not
 			// worth logging I imagine.
+		} else if g.readOnly {
+			fmt.Println("PEER: ", peer)
+			panic("Read-only cache should not be included in the peers list (or be the only participant in the cache)")
 		}
 		value, err = g.getLocally(ctx, key, dest)
 		if err != nil {
@@ -257,6 +269,10 @@ func (g *Group) load(ctx Context, key string, dest Sink) (value ByteView, destPo
 }
 
 func (g *Group) getLocally(ctx Context, key string, dest Sink) (ByteView, error) {
+	if g.readOnly {
+		panic("Read-only cache is trying to locally load the data.") // should never happen
+	}
+
 	err := g.getter.Get(ctx, key, dest)
 	if err != nil {
 		return ByteView{}, err
@@ -278,7 +294,8 @@ func (g *Group) getFromPeer(ctx Context, peer ProtoGetter, key string) (ByteView
 	// TODO(bradfitz): use res.MinuteQps or something smart to
 	// conditionally populate hotCache.  For now just do it some
 	// percentage of the time.
-	if rand.Intn(10) == 0 {
+	// read-only should populate the hot cache 100% of the time
+	if g.readOnly || rand.Intn(10) == 0 {
 		g.populateCache(key, value, &g.hotCache)
 	}
 	return value, nil
@@ -314,7 +331,8 @@ func (g *Group) populateCache(key string, value ByteView, cache *cache) {
 		// It should be something based on measurements and/or
 		// respecting the costs of different resources.
 		victim := &g.mainCache
-		if hotBytes > mainBytes/8 {
+		// read-only always evicts from the hot cache 100%
+		if g.readOnly || hotBytes > mainBytes/8 {
 			victim = &g.hotCache
 		}
 		victim.removeOldest()
