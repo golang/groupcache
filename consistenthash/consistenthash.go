@@ -61,17 +61,21 @@ func (m *Map) Add(keys ...string) {
 	sort.Ints(m.keys)
 }
 
-// Gets the <amount> closest items in the hash to the provided key,
+// Gets the N closest items in the hash to the provided key,
 // if they're permitted by the accept function. This can be used
-// to implement placement strategies. Like storing items in different
+// to implement placement strategies like storing items in different
 // availability zones.
 //
-// Two utility functions are provided that can be used as accept-callback:
-// - AcceptAny: Allow any and all items to be returned by GetN()
-// - AcceptUnique: Ensure only unique entries are returned.
-func (m *Map) GetN(key string, amount int, accept func([]string, string) bool) []string {
+// The accept function returns a bool to indicate whether the item
+// is acceptable. Its first argument is the items that have already
+// been accepted, the second argument is the item that is about to
+// be selected (if accepted).
+//
+// The AcceptAny and AcceptUnique functions are provided as utility
+// functions that can be used as accept-callback.
+func (m *Map) GetN(key string, n int, accept func([]string, string) bool) []string {
 	out := []string{}
-	if m.IsEmpty() || amount < 1 {
+	if m.IsEmpty() || n < 1 {
 		return out
 	}
 
@@ -84,7 +88,7 @@ func (m *Map) GetN(key string, amount int, accept func([]string, string) bool) [
 	out = append(out, m.hashMap[hashKey])
 
 	ringLength := len(m.hashMap)
-	for i := 1; len(out) < amount && i < ringLength; i++ {
+	for i := 1; len(out) < n && i < ringLength; i++ {
 		hashKey = m.getKeyFromHash(hashKey + 1)
 		res := m.hashMap[hashKey]
 		if accept(out, res) {
@@ -105,6 +109,7 @@ func (m *Map) Get(key string) string {
 	return m.hashMap[m.getKeyFromHash(hash)]
 }
 
+// Gets the key used in the hashmap based on the provided hash.
 func (m *Map) getKeyFromHash(hash int) int {
 	// Binary search for appropriate replica.
 	idx := sort.Search(len(m.keys), func(i int) bool { return m.keys[i] >= hash })
@@ -117,10 +122,10 @@ func (m *Map) getKeyFromHash(hash int) int {
 	return m.keys[idx]
 }
 
-// Used as callback by GetN() to not filter out anything
+// Accepts any items when used as accept argument in GetN.
 func AcceptAny([]string, string) bool { return true }
 
-// Used as callback by GetN() to filter out any duplicates
+// Accepts only unique items when used as accept argument in GetN.
 func AcceptUnique(stack []string, found string) bool {
 	for _, v := range stack {
 		if v == found {
