@@ -119,3 +119,36 @@ func (c *Cache) Len() int {
 	}
 	return c.ll.Len()
 }
+
+// Clear removes all items from the cache.
+func (c *Cache) Clear() {
+	if c.OnEvicted != nil {
+		for k, v := range c.cache {
+			c.OnEvicted(k, v.Value.(*entry).value)
+		}
+	}
+
+	c.ll = list.New()
+	c.cache = make(map[interface{}]*list.Element)
+}
+
+// Keys returns a slice of the keys in the cache, from oldest to newest.
+func (c *Cache) Keys() []interface{} {
+	keys := make([]interface{}, len(c.cache))
+	ele := c.ll.Back()
+	i := 0
+	for ele != nil {
+		keys[i] = ele.Value.(*entry).key
+		ele = ele.Prev()
+		i++
+	}
+	return keys
+}
+
+// Peek returns the key's value (or nil if not found) without updating the cache.
+func (c *Cache) Peek(key interface{}) (value interface{}, ok bool) {
+	if ele, ok := c.cache[key]; ok {
+		return ele.Value.(*entry).value, true
+	}
+	return nil, ok
+}
