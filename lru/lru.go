@@ -119,3 +119,11 @@ func (c *Cache) Len() int {
 	}
 	return c.ll.Len()
 }
+
+// Peek returns the key's value (or nil if not found) without updating the cache.
+func (c *Cache) Peek(key interface{}) (value interface{}, ok bool) {
+	if ele, ok := c.cache[key]; ok {
+		return ele.Value.(*entry).value, true
+	}
+	return nil, ok
+}

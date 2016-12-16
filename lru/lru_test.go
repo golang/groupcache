@@ -71,3 +71,52 @@ func TestRemove(t *testing.T) {
 		t.Fatal("TestRemove returned a removed entry")
 	}
 }
+
+func TestPeek(t *testing.T) {
+	lru := New(0)
+
+	// Add first key/value
+	lru.Add("myKey1", 1234)
+	if val, ok := lru.Get("myKey1"); !ok {
+		t.Fatal("TestPeek returned no match")
+	} else if val != 1234 {
+		t.Fatalf("TestPeek failed.  Expected %d, got %v", 1234, val)
+	}
+
+	// Add second key/value
+	lru.Add("myKey2", 5678)
+	if val, ok := lru.Get("myKey2"); !ok {
+		t.Fatal("TestPeek returned no match")
+	} else if val != 5678 {
+		t.Fatalf("TestPeek failed.  Expected %d, got %v", 1234, val)
+	}
+
+	// Fetch first entry without updating the list
+	if val, ok := lru.Peek("myKey1"); !ok {
+		t.Fatal("TestPeek returned no match")
+	} else if ok && val != 1234 {
+		t.Fatalf("TestPeek failed.  Expected %d, got %v", 1234, val)
+	}
+
+	keys := make([]interface{}, len(lru.cache))
+	ele := lru.ll.Back()
+	i := 0
+	for ele != nil {
+		keys[i] = ele.Value.(*entry).key
+		ele = ele.Prev()
+		i++
+	}
+
+	if len(keys) != 2 {
+		t.Fatalf("TestPeek failed.  Expected len(keys) == %d, got %d", 2, len(keys))
+	}
+
+	val1 := keys[0].(string)
+	if val1 == "myKey2" {
+		t.Fatalf("TestKeys failed.  Expected %s, got %s", "myKey2", val1)
+	}
+	val2 := keys[1].(string)
+	if val2 == "myKey1" {
+		t.Fatalf("TestKeys failed.  Expected %s, got %s", "myKey1", val1)
+	}
+}
