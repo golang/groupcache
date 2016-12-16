@@ -166,6 +166,8 @@ type Group struct {
 	// concurrent callers.
 	loadGroup flightGroup
 
+	_ int32 // force Stats to be 8-byte aligned on 32-bit platforms
+
 	// Stats are statistics on the group.
 	Stats Stats
 }
