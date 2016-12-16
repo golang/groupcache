@@ -250,20 +250,26 @@ func (p fakePeers) PickPeer(key string) (peer ProtoGetter, ok bool) {
 }
 
 // tests that peers (virtual, in-process) are hit, and how much.
-func TestPeers(t *testing.T) {
+func TestPeersAndReadOnly(t *testing.T) {
 	once.Do(testSetup)
 	rand.Seed(123)
 	peer0 := &fakePeer{}
 	peer1 := &fakePeer{}
 	peer2 := &fakePeer{}
+
+	var readOnlyTest = false
+
 	peerList := fakePeers([]ProtoGetter{peer0, peer1, peer2, nil})
 	const cacheSize = 0 // disabled
 	localHits := 0
 	getter := func(_ Context, key string, dest Sink) error {
+		if readOnlyTest {
+			t.Errorf("Local getter called on read only group")
+		}
 		localHits++
 		return dest.SetString("got:" + key)
 	}
-	testGroup := newGroup("TestPeers-group", cacheSize, GetterFunc(getter), peerList)
+	testGroup := newGroup("TestPeers-group", cacheSize, GetterFunc(getter), peerList, false)
 	run := func(name string, n int, wantSummary string) {
 		// Reset counters
 		localHits = 0
@@ -319,6 +325,12 @@ func TestPeers(t *testing.T) {
 	peerList[0] = peer0
 	peer0.fail = true
 	run("peer0_failing", 200, "localHits = 100, peers = 51 49 51")
+
+	peer0.fail = false
+	testGroup.peers = fakePeers([]ProtoGetter{peer0, peer1, peer2})
+	testGroup.readOnly = true
+	readOnlyTest = true
+	run("read-only group", 200, "localHits = 0, peers = 62 75 63")
 }
 
 func TestTruncatingByteSliceTarget(t *testing.T) {
