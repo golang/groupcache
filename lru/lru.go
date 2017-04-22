@@ -29,6 +29,11 @@ type Cache struct {
 	// executed when an entry is purged from the cache.
 	OnEvicted func(key Key, value interface{})
 
+	// OnOverWritten optionally specificies a callback function to be
+	// executed when an entry is overwritten from the cache.
+	// etc. sizeof(oldValue) - sizeof(newValue).
+	OnOverWritten func(oldValue interface{}, newValue interface{})
+
 	ll    *list.List
 	cache map[interface{}]*list.Element
 }
@@ -60,6 +65,9 @@ func (c *Cache) Add(key Key, value interface{}) {
 	}
 	if ee, ok := c.cache[key]; ok {
 		c.ll.MoveToFront(ee)
+		if c.OnOverWritten != nil {
+			c.OnOverWritten(ee.Value.(*entry).value, value)
+		}
 		ee.Value.(*entry).value = value
 		return
 	}
