@@ -39,7 +39,7 @@ type HTTPPool struct {
 	// Context optionally specifies a context for the server to use when it
 	// receives a request.
 	// If nil, the server uses a nil Context.
-	Context func(*http.Request) Context
+	Context func(w http.ResponseWriter, req *http.Request) Context
 
 	// Transport optionally specifies an http.RoundTripper for the client
 	// to use when it makes a request.
@@ -159,7 +159,7 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var ctx Context
 	if p.Context != nil {
-		ctx = p.Context(r)
+		ctx = p.Context(w, r)
 	}
 
 	group.Stats.ServerRequests.Add(1)
