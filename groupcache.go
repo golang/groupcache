@@ -84,6 +84,11 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 	return newGroup(name, cacheBytes, getter, nil)
 }
 
+// NewGroupWithPicker does like NewGroup but leave picker to be configurable.
+func NewGroupWithPicker(name string, cacheBytes int64, getter Getter, picker PeerPicker) *Group {
+	return newGroup(name, cacheBytes, getter, picker)
+}
+
 // If peers is nil, the peerPicker is called via a sync.Once to initialize it.
 func newGroup(name string, cacheBytes int64, getter Getter, peers PeerPicker) *Group {
 	if getter == nil {
