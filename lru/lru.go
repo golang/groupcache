@@ -58,7 +58,7 @@ func (c *Cache) Add(key Key, value interface{}) {
 		c.cache = make(map[interface{}]*list.Element)
 		c.ll = list.New()
 	}
-	if ee, ok := c.cache[key]; ok {
+	if ee, ok := c.cache[key]; ok && ee != nil {
 		c.ll.MoveToFront(ee)
 		ee.Value.(*entry).value = value
 		return
@@ -75,7 +75,7 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 	if c.cache == nil {
 		return
 	}
-	if ele, hit := c.cache[key]; hit {
+	if ele, hit := c.cache[key]; hit && ele != nil {
 		c.ll.MoveToFront(ele)
 		return ele.Value.(*entry).value, true
 	}
@@ -87,7 +87,7 @@ func (c *Cache) Remove(key Key) {
 	if c.cache == nil {
 		return
 	}
-	if ele, hit := c.cache[key]; hit {
+	if ele, hit := c.cache[key]; hit && ele != nil {
 		c.removeElement(ele)
 	}
 }
