@@ -61,6 +61,44 @@ func (m *Map) Add(keys ...string) {
 	sort.Ints(m.keys)
 }
 
+// Gets the N closest items in the hash to the provided key,
+// if they're permitted by the accept function. This can be used
+// to implement placement strategies like storing items in different
+// availability zones.
+//
+// The accept function returns a bool to indicate whether the item
+// is acceptable. Its first argument is the items that have already
+// been accepted, the second argument is the item that is about to
+// be selected (if accepted).
+//
+// The AcceptAny and AcceptUnique functions are provided as utility
+// functions that can be used as accept-callback.
+func (m *Map) GetN(key string, n int, accept func([]string, string) bool) []string {
+	out := []string{}
+	if m.IsEmpty() || n < 1 {
+		return out
+	}
+
+	if accept == nil {
+		accept = AcceptAny
+	}
+
+	hash := int(m.hash([]byte(key)))
+	hashKey := m.getKeyFromHash(hash)
+	out = append(out, m.hashMap[hashKey])
+
+	ringLength := len(m.hashMap)
+	for i := 1; len(out) < n && i < ringLength; i++ {
+		hashKey = m.getKeyFromHash(hashKey + 1)
+		res := m.hashMap[hashKey]
+		if accept(out, res) {
+			out = append(out, res)
+		}
+	}
+
+	return out
+}
+
 // Gets the closest item in the hash to the provided key.
 func (m *Map) Get(key string) string {
 	if m.IsEmpty() {
@@ -68,7 +106,11 @@ func (m *Map) Get(key string) string {
 	}
 
 	hash := int(m.hash([]byte(key)))
+	return m.hashMap[m.getKeyFromHash(hash)]
+}
 
+// Gets the key used in the hashmap based on the provided hash.
+func (m *Map) getKeyFromHash(hash int) int {
 	// Binary search for appropriate replica.
 	idx := sort.Search(len(m.keys), func(i int) bool { return m.keys[i] >= hash })
 
@@ -77,5 +119,18 @@ func (m *Map) Get(key string) string {
 		idx = 0
 	}
 
-	return m.hashMap[m.keys[idx]]
+	return m.keys[idx]
+}
+
+// Accepts any items when used as accept argument in GetN.
+func AcceptAny([]string, string) bool { return true }
+
+// Accepts only unique items when used as accept argument in GetN.
+func AcceptUnique(stack []string, found string) bool {
+	for _, v := range stack {
+		if v == found {
+			return false
+		}
+	}
+	return true
 }
