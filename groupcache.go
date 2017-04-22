@@ -333,7 +333,8 @@ func (g *Group) lookupCache(key string) (value ByteView, ok bool) {
 }
 
 func (g *Group) populateCache(key string, value ByteView, cache *cache) {
-	if g.cacheBytes <= 0 {
+        //The value in hotCache should not be blank.
+	if g.cacheBytes <= 0 || value.Len() == 0 {
 		return
 	}
 	cache.add(key, value)
