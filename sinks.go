@@ -40,6 +40,10 @@ type Sink interface {
 
 	// view returns a frozen view of the bytes for caching.
 	view() (ByteView, error)
+
+	// SetTimestampBytes sets the value to the contents of v, appending the
+	// supplied Unix epoch timestamp in seconds.
+	SetTimestampBytes(v []byte, timestamp int64) error
 }
 
 func cloneBytes(b []byte) []byte {
@@ -102,6 +106,14 @@ func (s *stringSink) SetProto(m proto.Message) error {
 	return nil
 }
 
+func (s *stringSink) SetTimestampBytes(b []byte, timestamp int64) error {
+	packedBytes, err := packTimestamp(b, timestamp)
+	if err != nil {
+		return err
+	}
+	return s.SetBytes(packedBytes)
+}
+
 // ByteViewSink returns a Sink that populates a ByteView.
 func ByteViewSink(dst *ByteView) Sink {
 	if dst == nil {
@@ -151,6 +163,14 @@ func (s *byteViewSink) SetString(v string) error {
 	return nil
 }
 
+func (s *byteViewSink) SetTimestampBytes(b []byte, timestamp int64) error {
+	packedBytes, err := packTimestamp(b, timestamp)
+	if err != nil {
+		return err
+	}
+	return s.SetBytes(packedBytes)
+}
+
 // ProtoSink returns a sink that unmarshals binary proto values into m.
 func ProtoSink(m proto.Message) Sink {
 	return &protoSink{
@@ -159,6 +179,7 @@ func ProtoSink(m proto.Message) Sink {
 }
 
 type protoSink struct {
+	noSetTimestampBytes
 	dst proto.Message // authorative value
 	typ string
 
@@ -266,6 +287,14 @@ func (s *allocBytesSink) SetString(v string) error {
 	return nil
 }
 
+func (s *allocBytesSink) SetTimestampBytes(b []byte, timestamp int64) error {
+	packedBytes, err := packTimestamp(b, timestamp)
+	if err != nil {
+		return err
+	}
+	return s.SetBytes(packedBytes)
+}
+
 // TruncatingByteSliceSink returns a Sink that writes up to len(*dst)
 // bytes to *dst. If more bytes are available, they're silently
 // truncated. If fewer bytes are available than len(*dst), *dst
@@ -275,6 +304,7 @@ func TruncatingByteSliceSink(dst *[]byte) Sink {
 }
 
 type truncBytesSink struct {
+	noSetTimestampBytes
 	dst *[]byte
 	v   ByteView
 }
@@ -319,4 +349,10 @@ func (s *truncBytesSink) SetString(v string) error {
 	s.v.b = nil
 	s.v.s = v
 	return nil
+}
+
+type noSetTimestampBytes struct{}
+
+func (s *noSetTimestampBytes) SetTimestampBytes(b []byte, timestamp int64) error {
+	return errors.New("SetTimestampBytes unimplemented.")
 }

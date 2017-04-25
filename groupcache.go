@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	pb "github.com/golang/groupcache/groupcachepb"
 	"github.com/golang/groupcache/lru"
@@ -170,6 +171,12 @@ type Group struct {
 
 	// Stats are statistics on the group.
 	Stats Stats
+
+	// For expiration functionality.
+	expiration      time.Duration
+	stalePeriod     time.Duration
+	staleDeadline   time.Duration
+	disableHotCache bool
 }
 
 // flightGroup is defined as an interface which flightgroup.Group
@@ -214,26 +221,35 @@ func (g *Group) Get(ctx Context, key string, dest Sink) error {
 
 	if cacheHit {
 		g.Stats.CacheHits.Add(1)
+
+		if g.expiration > 0 {
+			return g.handleExpiration(ctx, key, dest, value)
+		}
+
 		return setSinkView(dest, value)
 	}
+	return g.loadOnMiss(ctx, key, dest, false)
+}
 
+func (g *Group) loadOnMiss(ctx Context, key string, dest Sink, expired bool) error {
 	// Optimization to avoid double unmarshalling or copying: keep
 	// track of whether the dest was already populated. One caller
 	// (if local) will set this; the losers will not. The common
 	// case will likely be one caller.
 	destPopulated := false
-	value, destPopulated, err := g.load(ctx, key, dest)
+	value, destPopulated, err := g.load(ctx, key, dest, expired)
 	if err != nil {
 		return err
 	}
 	if destPopulated {
 		return nil
 	}
+
 	return setSinkView(dest, value)
 }
 
 // load loads key either by invoking the getter locally or by sending it to another machine.
-func (g *Group) load(ctx Context, key string, dest Sink) (value ByteView, destPopulated bool, err error) {
+func (g *Group) load(ctx Context, key string, dest Sink, expired bool) (value ByteView, destPopulated bool, err error) {
 	g.Stats.Loads.Add(1)
 	viewi, err := g.loadGroup.Do(key, func() (interface{}, error) {
 		// Check the cache again because singleflight can only dedup calls
@@ -264,9 +280,10 @@ func (g *Group) load(ctx Context, key string, dest Sink) (value ByteView, destPo
 		g.Stats.LoadsDeduped.Add(1)
 		var value ByteView
 		var err error
+		var peerErr error
 		if peer, ok := g.peers.PickPeer(key); ok {
-			value, err = g.getFromPeer(ctx, peer, key)
-			if err == nil {
+			value, peerErr = g.getFromPeer(ctx, peer, key, expired)
+			if peerErr == nil {
 				g.Stats.PeerLoads.Add(1)
 				return value, nil
 			}
@@ -283,7 +300,24 @@ func (g *Group) load(ctx Context, key string, dest Sink) (value ByteView, destPo
 		}
 		g.Stats.LocalLoads.Add(1)
 		destPopulated = true // only one caller of load gets this return value
-		g.populateCache(key, value, &g.mainCache)
+
+		// If expiration functionality is enabled, and if we locally generated a
+		// value owned by another server (because of peerErr), then we must store it
+		// in the hotCache instead of the mainCache so that it will be updated when
+		// we no longer get peerErr and the value expires.
+		//
+		// In getFromPeer() we always update the hotCache if an expired cache value
+		// comes from a remote owner.  Storing this remotely-owned value in the
+		// mainCache would be problematic, as we would never updated it if the owner
+		// stopped returning errors (because sucessfully remotely generated data is
+		// not written to mainCache).
+		if (peerErr != nil) && (g.expiration > 0) {
+			if !g.disableHotCache {
+				g.populateCache(key, value, &g.hotCache)
+			}
+		} else {
+			g.populateCache(key, value, &g.mainCache)
+		}
 		return value, nil
 	})
 	if err == nil {
@@ -300,7 +334,7 @@ func (g *Group) getLocally(ctx Context, key string, dest Sink) (ByteView, error)
 	return dest.view()
 }
 
-func (g *Group) getFromPeer(ctx Context, peer ProtoGetter, key string) (ByteView, error) {
+func (g *Group) getFromPeer(ctx Context, peer ProtoGetter, key string, expired bool) (ByteView, error) {
 	req := &pb.GetRequest{
 		Group: &g.name,
 		Key:   &key,
@@ -314,7 +348,9 @@ func (g *Group) getFromPeer(ctx Context, peer ProtoGetter, key string) (ByteView
 	// TODO(bradfitz): use res.MinuteQps or something smart to
 	// conditionally populate hotCache.  For now just do it some
 	// percentage of the time.
-	if rand.Intn(10) == 0 {
+	// If expired is true the value was previously in the hotCache, so must
+	// overwrite.
+	if !g.disableHotCache && (expired || rand.Intn(10) == 0) {
 		g.populateCache(key, value, &g.hotCache)
 	}
 	return value, nil
