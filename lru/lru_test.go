@@ -71,3 +71,56 @@ func TestRemove(t *testing.T) {
 		t.Fatal("TestRemove returned a removed entry")
 	}
 }
+
+func TestAddWithMaxEntries(t *testing.T) {
+	lru := New(3)
+	items := []struct {
+		key         string
+		value       string
+		shouldExist bool
+	}{
+		{"one", "1", false},
+		{"two", "2", true},
+		{"three", "3", true},
+		{"four", "4", true},
+		{"four", "4", true},
+	}
+	for _, tt := range items {
+		lru.Add(tt.key, tt.value)
+	}
+	if lru.Len() != 3 {
+		t.Fatalf("lru size: %d items; expected: 3 items", lru.Len())
+	}
+	for _, tt := range items {
+		if _, ok := lru.Get(tt.key); ok != tt.shouldExist {
+			t.Fatalf("value exists: %v for key:%s; expected: %v", ok, tt.key, tt.shouldExist)
+		}
+	}
+}
+
+func TestClearedCache(t *testing.T) {
+	lru := New(0)
+
+	// Test clearing out the cache
+	if lru.Clear(); lru.cache != nil && lru.ll != nil {
+		t.Fatalf("lru cache not Cleared")
+	}
+
+	// Test adding to a cache which is cleared
+	if lru.Add("foo", "bar"); lru.Len() != 1 {
+		t.Fatalf("lru size: %d items; expected: 1 item", lru.Len())
+	}
+
+	// Clear the cache
+	lru.Clear()
+
+	// Test Get from a cleared cache
+	if val, ok := lru.Get("foo"); val != nil || ok {
+		t.Fatalf("Get from cleared cache: %v, %v; expected: <nil>, false", val, ok)
+	}
+
+	// Test the length of a cleared cache
+	if length := lru.Len(); length != 0 {
+		t.Fatalf("Len of cleared cache: %d; expected: 0", length)
+	}
+}
