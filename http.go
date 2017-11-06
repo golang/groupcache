@@ -138,18 +138,48 @@ func (p *HTTPPool) PickPeer(key string) (ProtoGetter, bool) {
 	return nil, false
 }
 
-func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Parse request.
+func (p *HTTPPool) parseRequest(r *http.Request) (groupName, key string, ok bool) {
 	if !strings.HasPrefix(r.URL.Path, p.opts.BasePath) {
 		panic("HTTPPool serving unexpected path: " + r.URL.Path)
 	}
 	parts := strings.SplitN(r.URL.Path[len(p.opts.BasePath):], "/", 2)
 	if len(parts) != 2 {
+		return
+	}
+	groupName = parts[0]
+	key = parts[1]
+
+	queries, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		// Still accept groupName and key in path.
+		ok = true
+		return
+	}
+
+	var uerr error
+	if queries.Get("escaped") == "true" {
+		groupName, uerr = url.QueryUnescape(groupName)
+		if uerr != nil {
+			ok = false
+			return
+		}
+		key, uerr = url.QueryUnescape(key)
+		if uerr != nil {
+			ok = false
+			return
+		}
+	}
+
+	ok = true
+	return
+}
+
+func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	groupName, key, ok := p.parseRequest(r)
+	if !ok {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	groupName := parts[0]
-	key := parts[1]
 
 	// Fetch the value for this group/key.
 	group := GetGroup(groupName)
@@ -191,7 +221,7 @@ var bufferPool = sync.Pool{
 
 func (h *httpGetter) Get(context Context, in *pb.GetRequest, out *pb.GetResponse) error {
 	u := fmt.Sprintf(
-		"%v%v/%v",
+		"%v%v/%v?escaped=true",
 		h.baseURL,
 		url.QueryEscape(in.GetGroup()),
 		url.QueryEscape(in.GetKey()),
