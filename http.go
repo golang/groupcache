@@ -74,7 +74,7 @@ type HTTPPoolOptions struct {
 
 // NewHTTPPool initializes an HTTP pool of peers, and registers itself as a PeerPicker.
 // For convenience, it also registers itself as an http.Handler with http.DefaultServeMux.
-// The self argument should be a valid base URL that points to the current server,
+// The self argument be a valid base URL that points to the current server,
 // for example "http://example.net:8000".
 func NewHTTPPool(self string) *HTTPPool {
 	p := NewHTTPPoolOpts(self, nil)
@@ -157,14 +157,17 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such group: "+groupName, http.StatusNotFound)
 		return
 	}
-	var ctx Context
+	wctx := wrappedContext{
+		fromPeer: true,
+		ctx:      nil,
+	}
 	if p.Context != nil {
-		ctx = p.Context(r)
+		wctx.ctx = p.Context(r)
 	}
 
 	group.Stats.ServerRequests.Add(1)
 	var value []byte
-	err := group.Get(ctx, key, AllocatingByteSliceSink(&value))
+	err := group.Get(wctx, key, AllocatingByteSliceSink(&value))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
