@@ -217,12 +217,21 @@ func (g *Group) Get(ctx Context, key string, dest Sink) error {
 		return setSinkView(dest, value)
 	}
 
+	allowPeer := true
+	if wctx, ok := ctx.(wrappedContext); ok {
+		if wctx.fromPeer {
+			// Prevent multiple hops. Can only make one peer request.
+			allowPeer = false
+		}
+		ctx = wctx.ctx
+	}
+
 	// Optimization to avoid double unmarshalling or copying: keep
 	// track of whether the dest was already populated. One caller
 	// (if local) will set this; the losers will not. The common
 	// case will likely be one caller.
 	destPopulated := false
-	value, destPopulated, err := g.load(ctx, key, dest)
+	value, destPopulated, err := g.load(ctx, allowPeer, key, dest)
 	if err != nil {
 		return err
 	}
@@ -233,7 +242,7 @@ func (g *Group) Get(ctx Context, key string, dest Sink) error {
 }
 
 // load loads key either by invoking the getter locally or by sending it to another machine.
-func (g *Group) load(ctx Context, key string, dest Sink) (value ByteView, destPopulated bool, err error) {
+func (g *Group) load(ctx Context, allowPeer bool, key string, dest Sink) (value ByteView, destPopulated bool, err error) {
 	g.Stats.Loads.Add(1)
 	viewi, err := g.loadGroup.Do(key, func() (interface{}, error) {
 		// Check the cache again because singleflight can only dedup calls
@@ -264,22 +273,24 @@ func (g *Group) load(ctx Context, key string, dest Sink) (value ByteView, destPo
 		g.Stats.LoadsDeduped.Add(1)
 		var value ByteView
 		var err error
-		if peer, ok := g.peers.PickPeer(key); ok {
-			value, err = g.getFromPeer(ctx, peer, key)
-			if err == nil {
-				g.Stats.PeerLoads.Add(1)
-				return value, nil
+		if allowPeer {
+			if peer, ok := g.peers.PickPeer(key); ok {
+				value, err = g.getFromPeer(ctx, peer, key)
+				if err == nil {
+					g.Stats.PeerLoads.Add(1)
+					return value, nil
+				}
+				g.Stats.PeerErrors.Add(1)
+				// TODO(bradfitz): log the peer's error? keep
+				// log of the past few for /groupcachez?  It's
+				// probably boring (normal task movement), so not
+				// worth logging I imagine.
 			}
-			g.Stats.PeerErrors.Add(1)
-			// TODO(bradfitz): log the peer's error? keep
-			// log of the past few for /groupcachez?  It's
-			// probably boring (normal task movement), so not
-			// worth logging I imagine.
-		}
-		value, err = g.getLocally(ctx, key, dest)
-		if err != nil {
-			g.Stats.LocalLoadErrs.Add(1)
-			return nil, err
+			value, err = g.getLocally(ctx, key, dest)
+			if err != nil {
+				g.Stats.LocalLoadErrs.Add(1)
+				return nil, err
+			}
 		}
 		g.Stats.LocalLoads.Add(1)
 		destPopulated = true // only one caller of load gets this return value

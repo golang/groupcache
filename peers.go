@@ -83,3 +83,8 @@ func getPeers(groupName string) PeerPicker {
 	}
 	return pk
 }
+
+type wrappedContext struct {
+	fromPeer bool
+	ctx      Context
+}
