@@ -19,6 +19,7 @@ package consistenthash
 
 import (
 	"hash/crc32"
+	"math/bits"
 	"sort"
 	"strconv"
 )
@@ -26,17 +27,24 @@ import (
 type Hash func(data []byte) uint32
 
 type Map struct {
-	hash     Hash
-	replicas int
-	keys     []int // Sorted
-	hashMap  map[int]string
+	hash                 Hash
+	replicas             int
+	prefixTableExpansion int
+
+	keys    []int // Sorted
+	hashMap map[int]string
+
+	prefixBits  uint32
+	prefixShift uint32
+	prefixTable []string
 }
 
-func New(replicas int, fn Hash) *Map {
+func New(replicas int, tableExpansion int, fn Hash) *Map {
 	m := &Map{
-		replicas: replicas,
-		hash:     fn,
-		hashMap:  make(map[int]string),
+		replicas:             replicas,
+		hash:                 fn,
+		hashMap:              make(map[int]string),
+		prefixTableExpansion: tableExpansion,
 	}
 	if m.hash == nil {
 		m.hash = crc32.ChecksumIEEE
@@ -59,6 +67,37 @@ func (m *Map) Add(keys ...string) {
 		}
 	}
 	sort.Ints(m.keys)
+
+	// Find minimum number of bits to hold |keys| * prefixTableExpansion
+	m.prefixBits = uint32(bits.Len32(uint32(len(m.keys) * m.prefixTableExpansion)))
+	m.prefixShift = 32 - m.prefixBits
+
+	prefixTableSize := 1 << m.prefixBits
+	m.prefixTable = make([]string, prefixTableSize)
+
+	previousKeyPrefix := -1 // Effectively -Inf
+	currentKeyIdx := 0
+	currentKeyPrefix := m.keys[currentKeyIdx] >> m.prefixShift
+
+	for i := range m.prefixTable {
+		if previousKeyPrefix < i && currentKeyPrefix > i {
+			// All keys with this prefix will map to a single value
+			m.prefixTable[i] = m.hashMap[m.keys[currentKeyIdx]]
+		} else {
+			// Several keys might have the same prefix.  Walk
+			// over them until it changes
+			previousKeyPrefix = currentKeyPrefix
+			for currentKeyPrefix == previousKeyPrefix {
+				currentKeyIdx++
+				if currentKeyIdx < len(m.keys) {
+					currentKeyPrefix = m.keys[currentKeyIdx] >> m.prefixShift
+				} else {
+					currentKeyIdx = 0
+					currentKeyPrefix = prefixTableSize + 1 // Effectively +Inf
+				}
+			}
+		}
+	}
 }
 
 // Gets the closest item in the hash to the provided key.
@@ -68,6 +107,13 @@ func (m *Map) Get(key string) string {
 	}
 
 	hash := int(m.hash([]byte(key)))
+
+	// Look for the hash prefix in the prefix table
+	prefixSlot := hash >> m.prefixShift
+	tableResult := m.prefixTable[prefixSlot]
+	if len(tableResult) > 0 {
+		return tableResult
+	}
 
 	// Binary search for appropriate replica.
 	idx := sort.Search(len(m.keys), func(i int) bool { return m.keys[i] >= hash })

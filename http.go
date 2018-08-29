@@ -34,6 +34,8 @@ const defaultBasePath = "/_groupcache/"
 
 const defaultReplicas = 50
 
+const defaultHashExpansion = 6
+
 // HTTPPool implements PeerPicker for a pool of HTTP peers.
 type HTTPPool struct {
 	// Context optionally specifies a context for the server to use when it
@@ -106,7 +108,7 @@ func NewHTTPPoolOpts(self string, o *HTTPPoolOptions) *HTTPPool {
 	if p.opts.Replicas == 0 {
 		p.opts.Replicas = defaultReplicas
 	}
-	p.peers = consistenthash.New(p.opts.Replicas, p.opts.HashFn)
+	p.peers = consistenthash.New(p.opts.Replicas, defaultHashExpansion, p.opts.HashFn)
 
 	RegisterPeerPicker(func() PeerPicker { return p })
 	return p
@@ -118,7 +120,7 @@ func NewHTTPPoolOpts(self string, o *HTTPPoolOptions) *HTTPPool {
 func (p *HTTPPool) Set(peers ...string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.peers = consistenthash.New(p.opts.Replicas, p.opts.HashFn)
+	p.peers = consistenthash.New(p.opts.Replicas, defaultHashExpansion, p.opts.HashFn)
 	p.peers.Add(peers...)
 	p.httpGetters = make(map[string]*httpGetter, len(peers))
 	for _, peer := range peers {
