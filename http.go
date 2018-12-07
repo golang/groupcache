@@ -70,6 +70,10 @@ type HTTPPoolOptions struct {
 	// HashFn specifies the hash function of the consistent hash.
 	// If blank, it defaults to crc32.ChecksumIEEE.
 	HashFn consistenthash.Hash
+
+	// Never attempt to create the cached object from a remote
+	// machine
+	AlwaysLocal bool
 }
 
 // NewHTTPPool initializes an HTTP pool of peers, and registers itself as a PeerPicker.
@@ -132,7 +136,7 @@ func (p *HTTPPool) PickPeer(key string) (ProtoGetter, bool) {
 	if p.peers.IsEmpty() {
 		return nil, false
 	}
-	if peer := p.peers.Get(key); peer != p.self {
+	if peer := p.peers.Get(key); peer != p.self && !p.opts.AlwaysLocal {
 		return p.httpGetters[peer], true
 	}
 	return nil, false
