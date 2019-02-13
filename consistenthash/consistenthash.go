@@ -44,12 +44,12 @@ func New(replicas int, fn Hash) *Map {
 	return m
 }
 
-// Returns true if there are no items available.
+// IsEmpty returns true if there are no items available.
 func (m *Map) IsEmpty() bool {
 	return len(m.keys) == 0
 }
 
-// Adds some keys to the hash.
+// Add adds some keys to the hash.
 func (m *Map) Add(keys ...string) {
 	for _, key := range keys {
 		for i := 0; i < m.replicas; i++ {
@@ -61,7 +61,7 @@ func (m *Map) Add(keys ...string) {
 	sort.Ints(m.keys)
 }
 
-// Gets the closest item in the hash to the provided key.
+// Get gets the closest item in the hash to the provided key.
 func (m *Map) Get(key string) string {
 	if m.IsEmpty() {
 		return ""

@@ -78,7 +78,7 @@ func testSetup() {
 	}))
 }
 
-// tests that a Getter's Get method is only called once with two
+// TestGetDupSuppressString tests that a Getter's Get method is only called once with two
 // outstanding callers.  This is the string variant.
 func TestGetDupSuppressString(t *testing.T) {
 	once.Do(testSetup)
@@ -120,7 +120,7 @@ func TestGetDupSuppressString(t *testing.T) {
 	}
 }
 
-// tests that a Getter's Get method is only called once with two
+// TestGetDupSuppressProto tests that a Getter's Get method is only called once with two
 // outstanding callers.  This is the proto variant.
 func TestGetDupSuppressProto(t *testing.T) {
 	once.Do(testSetup)
@@ -249,7 +249,7 @@ func (p fakePeers) PickPeer(key string) (peer ProtoGetter, ok bool) {
 	return p[n], p[n] != nil
 }
 
-// tests that peers (virtual, in-process) are hit, and how much.
+// TestPeers tests that peers (virtual, in-process) are hit, and how much.
 func TestPeers(t *testing.T) {
 	once.Do(testSetup)
 	rand.Seed(123)
