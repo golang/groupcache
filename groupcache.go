@@ -221,7 +221,6 @@ func (g *Group) Get(ctx Context, key string, dest Sink) error {
 	// track of whether the dest was already populated. One caller
 	// (if local) will set this; the losers will not. The common
 	// case will likely be one caller.
-	destPopulated := false
 	value, destPopulated, err := g.load(ctx, key, dest)
 	if err != nil {
 		return err
