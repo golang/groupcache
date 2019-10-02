@@ -2,8 +2,8 @@
 
 ## Summary
 
-groupcache is a caching and cache-filling library, intended as a
-replacement for memcached in many cases.
+groupcache is a distributed caching and cache-filling library, intended as a
+replacement for a pool of memcached nodes in many cases.
 
 For API docs and examples, see http://godoc.org/github.com/golang/groupcache
 
@@ -17,7 +17,8 @@ For API docs and examples, see http://godoc.org/github.com/golang/groupcache
 
  * does not require running a separate set of servers, thus massively
    reducing deployment/configuration pain.  groupcache is a client
-   library as well as a server.  It connects to its own peers.
+   library as well as a server.  It connects to its own peers, forming
+   a distributed cache.
 
  * comes with a cache filling mechanism.  Whereas memcached just says
    "Sorry, cache miss", often resulting in a thundering herd of
