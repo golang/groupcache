@@ -149,7 +149,7 @@ func addrToURL(addr []string) []string {
 func awaitAddrReady(t *testing.T, addr string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	const max = 1 * time.Second
-	tries := 0
+	var tries int
 	for {
 		tries++
 		c, err := net.Dial("tcp", addr)

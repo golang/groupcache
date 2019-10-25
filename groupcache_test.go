@@ -258,7 +258,7 @@ func TestPeers(t *testing.T) {
 	peer2 := &fakePeer{}
 	peerList := fakePeers([]ProtoGetter{peer0, peer1, peer2, nil})
 	const cacheSize = 0 // disabled
-	localHits := 0
+	var localHits int
 	getter := func(_ Context, key string, dest Sink) error {
 		localHits++
 		return dest.SetString("got:" + key)
