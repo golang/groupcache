@@ -25,6 +25,7 @@ limitations under the License.
 package groupcache
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"strconv"
@@ -44,13 +45,13 @@ type Getter interface {
 	// uniquely describe the loaded data, without an implicit
 	// current time, and without relying on cache expiration
 	// mechanisms.
-	Get(ctx Context, key string, dest Sink) error
+	Get(ctx context.Context, key string, dest Sink) error
 }
 
 // A GetterFunc implements Getter with a function.
-type GetterFunc func(ctx Context, key string, dest Sink) error
+type GetterFunc func(ctx context.Context, key string, dest Sink) error
 
-func (f GetterFunc) Get(ctx Context, key string, dest Sink) error {
+func (f GetterFunc) Get(ctx context.Context, key string, dest Sink) error {
 	return f(ctx, key, dest)
 }
 
@@ -204,7 +205,7 @@ func (g *Group) initPeers() {
 	}
 }
 
-func (g *Group) Get(ctx Context, key string, dest Sink) error {
+func (g *Group) Get(ctx context.Context, key string, dest Sink) error {
 	g.peersOnce.Do(g.initPeers)
 	g.Stats.Gets.Add(1)
 	if dest == nil {
@@ -233,7 +234,7 @@ func (g *Group) Get(ctx Context, key string, dest Sink) error {
 }
 
 // load loads key either by invoking the getter locally or by sending it to another machine.
-func (g *Group) load(ctx Context, key string, dest Sink) (value ByteView, destPopulated bool, err error) {
+func (g *Group) load(ctx context.Context, key string, dest Sink) (value ByteView, destPopulated bool, err error) {
 	g.Stats.Loads.Add(1)
 	viewi, err := g.loadGroup.Do(key, func() (interface{}, error) {
 		// Check the cache again because singleflight can only dedup calls
@@ -292,7 +293,7 @@ func (g *Group) load(ctx Context, key string, dest Sink) (value ByteView, destPo
 	return
 }
 
-func (g *Group) getLocally(ctx Context, key string, dest Sink) (ByteView, error) {
+func (g *Group) getLocally(ctx context.Context, key string, dest Sink) (ByteView, error) {
 	err := g.getter.Get(ctx, key, dest)
 	if err != nil {
 		return ByteView{}, err
@@ -300,7 +301,7 @@ func (g *Group) getLocally(ctx Context, key string, dest Sink) (ByteView, error)
 	return dest.view()
 }
 
-func (g *Group) getFromPeer(ctx Context, peer ProtoGetter, key string) (ByteView, error) {
+func (g *Group) getFromPeer(ctx context.Context, peer ProtoGetter, key string) (ByteView, error) {
 	req := &pb.GetRequest{
 		Group: &g.name,
 		Key:   &key,

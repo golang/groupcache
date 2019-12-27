@@ -17,6 +17,7 @@ limitations under the License.
 package groupcache
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"log"
@@ -85,7 +86,7 @@ func TestHTTPPool(t *testing.T) {
 	// Dummy getter function. Gets should go to children only.
 	// The only time this process will handle a get is when the
 	// children can't be contacted for some reason.
-	getter := GetterFunc(func(ctx Context, key string, dest Sink) error {
+	getter := GetterFunc(func(ctx context.Context, key string, dest Sink) error {
 		return errors.New("parent getter called; something's wrong")
 	})
 	g := NewGroup("httpPoolTest", 1<<20, getter)
@@ -116,7 +117,7 @@ func beChildForTestHTTPPool() {
 	p := NewHTTPPool("http://" + addrs[*peerIndex])
 	p.Set(addrToURL(addrs)...)
 
-	getter := GetterFunc(func(ctx Context, key string, dest Sink) error {
+	getter := GetterFunc(func(ctx context.Context, key string, dest Sink) error {
 		dest.SetString(strconv.Itoa(*peerIndex) + ":" + key)
 		return nil
 	})
