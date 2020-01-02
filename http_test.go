@@ -93,7 +93,7 @@ func TestHTTPPool(t *testing.T) {
 
 	for _, key := range testKeys(nGets) {
 		var value string
-		if err := g.Get(nil, key, StringSink(&value)); err != nil {
+		if err := g.Get(context.TODO(), key, StringSink(&value)); err != nil {
 			t.Fatal(err)
 		}
 		if suffix := ":" + key; !strings.HasSuffix(value, suffix) {
