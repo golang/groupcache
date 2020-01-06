@@ -199,10 +199,11 @@ func (h *httpGetter) Get(ctx context.Context, in *pb.GetRequest, out *pb.GetResp
 		url.QueryEscape(in.GetGroup()),
 		url.QueryEscape(in.GetKey()),
 	)
-	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		return err
 	}
+	req = req.WithContext(ctx)
 	tr := http.DefaultTransport
 	if h.transport != nil {
 		tr = h.transport(ctx)
