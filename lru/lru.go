@@ -83,13 +83,14 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 }
 
 // Remove removes the provided key from the cache.
-func (c *Cache) Remove(key Key) {
+func (c *Cache) Remove(key Key) bool {
 	if c.cache == nil {
-		return
+		return false
 	}
 	if ele, hit := c.cache[key]; hit {
-		c.removeElement(ele)
+		return c.removeElement(ele)
 	}
+	return false
 }
 
 // RemoveOldest removes the oldest item from the cache.
@@ -103,13 +104,14 @@ func (c *Cache) RemoveOldest() {
 	}
 }
 
-func (c *Cache) removeElement(e *list.Element) {
-	c.ll.Remove(e)
+func (c *Cache) removeElement(e *list.Element) bool {
+	n := c.ll.Remove(e)
 	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)
 	if c.OnEvicted != nil {
 		c.OnEvicted(kv.key, kv.value)
 	}
+	return n != nil
 }
 
 // Len returns the number of items in the cache.
