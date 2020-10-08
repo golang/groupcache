@@ -19,6 +19,7 @@ package groupcache
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -115,16 +116,45 @@ func NewHTTPPoolOpts(self string, o *HTTPPoolOptions) *HTTPPool {
 
 // Set updates the pool's list of peers.
 // Each peer value should be a valid base URL,
-// for example "http://example.net:8000".
-func (p *HTTPPool) Set(peers ...string) {
+// for example "http://example.net:8000". Note
+// that the  scheme ("http://" or "https://") is
+// required.
+func (p *HTTPPool) Set(peers ...string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	for _, peer := range peers {
+		// Make sure peer address is valid before using it. Address
+		// must be a valid base URL.
+		u, err := url.Parse(peer)
+		if err != nil {
+			return err
+		}
+
+		// Check that scheme is provided per the func-level comment. If
+		// scheme is missing, host will not be able to communicate with
+		// peers. Not using strings.Contains() here since peer address
+		// could be incorrectly typed, such as hhttp or httpss.
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return errors.New("peer address not using correct scheme, must be http or https")
+		}
+
+		// This was added to handle an address such as http:///example.com:8000
+		// where the address will be parsed as a path with blank host.
+		if u.Host == "" {
+			return errors.New("peer address missing host, possibly extra slashes in address")
+		}
+
+		// TODO: check if port is valid. Use net.SplitHostPort?
+
+		p.httpGetters[peer] = &httpGetter{transport: p.Transport, baseURL: peer + p.opts.BasePath}
+	}
+
 	p.peers = consistenthash.New(p.opts.Replicas, p.opts.HashFn)
 	p.peers.Add(peers...)
 	p.httpGetters = make(map[string]*httpGetter, len(peers))
-	for _, peer := range peers {
-		p.httpGetters[peer] = &httpGetter{transport: p.Transport, baseURL: peer + p.opts.BasePath}
-	}
+
+	return nil
 }
 
 func (p *HTTPPool) PickPeer(key string) (ProtoGetter, bool) {
