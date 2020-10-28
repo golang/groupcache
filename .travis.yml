@@ -1,6 +1,8 @@
 language: go
 go_import_path: github.com/golang/groupcache
-
+arch:
+  - amd64
+  - ppc64le
 os: linux
 dist: trusty
 sudo: false
