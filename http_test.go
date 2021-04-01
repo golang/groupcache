@@ -104,9 +104,11 @@ func TestHTTPPool(t *testing.T) {
 }
 
 func testKeys(n int) (keys []string) {
-	keys = make([]string, n)
-	for i := range keys {
-		keys[i] = strconv.Itoa(i)
+	keys = make([]string, 0)
+	for i := 0; i < n; i++ {
+		keys = append(keys, strconv.Itoa(i))
+		// Keys with char to be escaped
+		keys = append(keys, " "+strconv.Itoa(i))
 	}
 	return
 }
