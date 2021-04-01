@@ -165,3 +165,51 @@ func awaitAddrReady(t *testing.T, addr string, wg *sync.WaitGroup) {
 		time.Sleep(delay)
 	}
 }
+
+func TestSet(t *testing.T) {
+	// list of peer addresses to test with, and whether or not we expect
+	// peer to be valid.
+	// TODO: add IPv6 addresses.
+	peers := map[string]bool{
+		//addres.......................valid
+		"http://10.0.0.1:8000":        true,
+		"https://example.com:8001":    true,
+		"http://sub.example.com:8002": true,
+		"https://localhost:8003":      true,
+
+		"10.0.0.1:8100":             false,
+		"example.com:8101":          false,
+		"sub.example.com:8102":      false,
+		"localhost:8103":            false,
+		"http:////example.com:8104": false,
+		"//example.com:8105":        false,
+		"httpss//example.com:8106":  false,
+		"hhttp//example.com:8107":   false,
+		"htxtp//example.com:8108":   false,
+		"http//example:8109":        false,
+		"http//example/path/:8110":  false,
+		"/":                         false,
+		"":                          false,
+		":8111":                     false,
+		":http://example.com":       false,
+	}
+
+	// create pool to use for testing, using a known
+	// good/valid address
+	pool := NewHTTPPool("http://localhost:8080")
+
+	// try setting peers
+	for addr, valid := range peers {
+		err := pool.Set(addr)
+		if valid && err != nil {
+			t.Fatal("Peer address NOT valid but should be: " + addr)
+			return
+		}
+		if !valid && err == nil {
+			t.Fatal("Peer address valid but should NOT be: " + addr)
+			return
+		}
+	}
+
+	return
+}
