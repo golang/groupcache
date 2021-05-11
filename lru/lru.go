@@ -104,8 +104,11 @@ func (c *Cache) RemoveOldest() {
 }
 
 func (c *Cache) removeElement(e *list.Element) {
+	kv,ok := e.Value.(*entry)
+	if !ok {
+		return
+	}
 	c.ll.Remove(e)
-	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)
 	if c.OnEvicted != nil {
 		c.OnEvicted(kv.key, kv.value)
@@ -124,7 +127,10 @@ func (c *Cache) Len() int {
 func (c *Cache) Clear() {
 	if c.OnEvicted != nil {
 		for _, e := range c.cache {
-			kv := e.Value.(*entry)
+			kv,ok := e.Value.(*entry)
+			if !ok {
+				return
+			}
 			c.OnEvicted(kv.key, kv.value)
 		}
 	}
