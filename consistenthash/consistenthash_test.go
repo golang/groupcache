@@ -75,10 +75,10 @@ func TestConsistency(t *testing.T) {
 	if hash1.Get("Ben") != hash2.Get("Ben") {
 		t.Errorf("Fetching 'Ben' from both hashes should be the same")
 	}
-
-	if hash1.Get("Bill0") != hash2.Get("Bill0") ||
-		hash1.Get("Bob0") != hash2.Get("Bob0") ||
-		hash1.Get("Bonny0") != hash2.Get("Bonny0") {
+	
+	if hash1.Get("0Bill") != hash2.Get("0Bill") ||
+		hash1.Get("0Bob") != hash2.Get("0Bob") ||
+		hash1.Get("0Bonny") != hash2.Get("0Bonny") {
 		t.Errorf("Direct matches should always return the same entry")
 	}
 }
