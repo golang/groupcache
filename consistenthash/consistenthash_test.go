@@ -78,9 +78,9 @@ func TestConsistency(t *testing.T) {
 
 	hash2.Add("Becky", "Ben", "Bobby")
 
-	if hash1.Get("Ben") != hash2.Get("Ben") ||
-		hash1.Get("Bob") != hash2.Get("Bob") ||
-		hash1.Get("Bonny") != hash2.Get("Bonny") {
+	if hash1.Get("0Bill") != hash2.Get("0Bill") ||
+		hash1.Get("0Bob") != hash2.Get("0Bob") ||
+		hash1.Get("0Bonny") != hash2.Get("0Bonny") {
 		t.Errorf("Direct matches should always return the same entry")
 	}
 
