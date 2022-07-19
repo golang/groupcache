@@ -108,6 +108,8 @@ func newGroup(name string, cacheBytes int64, getter Getter, peers PeerPicker) *G
 			MiniteQPS:  make(map[interface{}]float64, 0),
 		},
 	}
+	// start tick
+	go g.Qps.samplingQueryTimes()
 	if fn := newGroupHook; fn != nil {
 		fn(g)
 	}
