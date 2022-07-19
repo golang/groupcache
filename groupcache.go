@@ -27,10 +27,10 @@ package groupcache
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	pb "github.com/golang/groupcache/groupcachepb"
 	"github.com/golang/groupcache/lru"
@@ -102,7 +102,14 @@ func newGroup(name string, cacheBytes int64, getter Getter, peers PeerPicker) *G
 		peers:      peers,
 		cacheBytes: cacheBytes,
 		loadGroup:  &singleflight.Group{},
+		Qps: QPS{
+			span:       time.Minute,
+			queryTimes: make(map[interface{}]AtomicInt, 0),
+			MiniteQPS:  make(map[interface{}]float64, 0),
+		},
 	}
+	// start tick
+	go g.Qps.samplingQueryTimes()
 	if fn := newGroupHook; fn != nil {
 		fn(g)
 	}
@@ -171,6 +178,9 @@ type Group struct {
 
 	// Stats are statistics on the group.
 	Stats Stats
+
+	// record queryTime
+	Qps QPS
 }
 
 // flightGroup is defined as an interface which flightgroup.Group
@@ -194,6 +204,33 @@ type Stats struct {
 	ServerRequests AtomicInt // gets that came over the network from peers
 }
 
+type QPS struct {
+	sync.RWMutex //
+	span         time.Duration
+	queryTimes   map[interface{}]AtomicInt
+	MiniteQPS    map[interface{}]float64
+}
+
+// samplingQueryTimes is timed task
+func (q *QPS) samplingQueryTimes() {
+	q.Lock()
+	defer q.Unlock()
+	for k, v := range q.queryTimes {
+		q.MiniteQPS[k] = float64(v) / q.span.Seconds()
+		q.queryTimes[k] = 0
+	}
+	time.AfterFunc(q.span, func() {
+		q.samplingQueryTimes()
+	})
+}
+
+// GetQPS Get QPS of special key.
+func (q *QPS) GetQPS(key interface{}) float64 {
+	q.RLock()
+	defer q.RUnlock()
+	return q.MiniteQPS[key]
+}
+
 // Name returns the name of the group.
 func (g *Group) Name() string {
 	return g.name
@@ -208,6 +245,8 @@ func (g *Group) initPeers() {
 func (g *Group) Get(ctx context.Context, key string, dest Sink) error {
 	g.peersOnce.Do(g.initPeers)
 	g.Stats.Gets.Add(1)
+	op := g.Qps.queryTimes[key]
+	op.Add(1)
 	if dest == nil {
 		return errors.New("groupcache: nil dest Sink")
 	}
@@ -315,7 +354,11 @@ func (g *Group) getFromPeer(ctx context.Context, peer ProtoGetter, key string) (
 	// TODO(bradfitz): use res.MinuteQps or something smart to
 	// conditionally populate hotCache.  For now just do it some
 	// percentage of the time.
-	if rand.Intn(10) == 0 {
+	//if rand.Intn(10) == 0 {
+	//	g.populateCache(key, value, &g.hotCache)
+	//}
+	threshold := 1000 // just a demo.
+	if *res.MinuteQps > float64(threshold) {
 		g.populateCache(key, value, &g.hotCache)
 	}
 	return value, nil

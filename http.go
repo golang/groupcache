@@ -173,8 +173,9 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	minuteQPS := group.Qps.GetQPS(key)
 	// Write the value to the response body as a proto message.
-	body, err := proto.Marshal(&pb.GetResponse{Value: value})
+	body, err := proto.Marshal(&pb.GetResponse{Value: value, MinuteQps: &minuteQPS})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
