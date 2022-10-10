@@ -105,7 +105,10 @@ func (c *Cache) RemoveOldest() {
 
 func (c *Cache) removeElement(e *list.Element) {
 	c.ll.Remove(e)
-	kv := e.Value.(*entry)
+	kv, ok := e.Value.(*entry)
+	if !ok {
+		return
+	}
 	delete(c.cache, kv.key)
 	if c.OnEvicted != nil {
 		c.OnEvicted(kv.key, kv.value)
