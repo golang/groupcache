@@ -14,13 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-syntax = "proto2";
+syntax = "proto3";
 
-package groupcachepb;
+
+option go_package = "groupcachepb.v1";
+
 
 message GetRequest {
-  required string group = 1;
-  required string key = 2; // not actually required/guaranteed to be UTF-8
+  string group = 1;
+  string key = 2; // not actually required/guaranteed to be UTF-8
 }
 
 message GetResponse {

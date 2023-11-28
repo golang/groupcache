@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-syntax = "proto2";
+syntax = "proto3";
 
-package testpb;
+option go_package =  "testpb.v1";
 
 message TestMessage {
   optional string name = 1;
@@ -24,8 +24,8 @@ message TestMessage {
 }
 
 message TestRequest {
-  required string lower = 1; // to be returned upper case
-  optional int32 repeat_count = 2 [default = 1]; // .. this many times
+  string lower = 1; // to be returned upper case
+  optional int32 repeat_count = 2; // .. this many times
 }
 
 message TestResponse {

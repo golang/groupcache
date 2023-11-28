@@ -19,7 +19,7 @@ package groupcache
 import (
 	"errors"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 // A Sink receives data from a Get call.

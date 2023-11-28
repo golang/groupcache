@@ -32,9 +32,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	pb "github.com/golang/groupcache/groupcachepb"
-	"github.com/golang/groupcache/lru"
-	"github.com/golang/groupcache/singleflight"
+	pb "github.com/adrian-lin-1-0-0/groupcache/groupcachepb"
+	"github.com/adrian-lin-1-0-0/groupcache/lru"
+	"github.com/adrian-lin-1-0-0/groupcache/singleflight"
 )
 
 // A Getter loads data for a key.
@@ -303,8 +303,8 @@ func (g *Group) getLocally(ctx context.Context, key string, dest Sink) (ByteView
 
 func (g *Group) getFromPeer(ctx context.Context, peer ProtoGetter, key string) (ByteView, error) {
 	req := &pb.GetRequest{
-		Group: &g.name,
-		Key:   &key,
+		Group: g.name,
+		Key:   key,
 	}
 	res := &pb.GetResponse{}
 	err := peer.Get(ctx, req, res)
