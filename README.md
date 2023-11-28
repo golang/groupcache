@@ -7,6 +7,106 @@ replacement for a pool of memcached nodes in many cases.
 
 For API docs and examples, see http://godoc.org/github.com/adrian-lin-1-0-0/groupcache
 
+## Class Diagram
+
+```mermaid
+---
+title: groupcache 
+---
+classDiagram
+
+class Sink{
+    <<interface>> 
+}
+
+class Getter{
+    <<interface>> 
+    + Get(ctx context.Context, key string, dest Sink) :error
+}
+
+class Global {
+    - groups : map[string]*Group
+
+    + GetGroup(name string) *Group
+    + NewGroup(name string, cacheBytes int64, getter Getter) *Group
+}
+
+class flightGroup{
+    <<interface>>
+    + Do(key string, fn func() (any, error)) : (any, error)
+}
+
+class Group{
+    - name : string
+    - cacheBytes : int64
+    - peersOnce : sync.Once
+
+    + Get(ctx context.Context, key string, dest Sink) :error
+}
+
+class cache{
+    - mu : sync.Mutex
+
+    + add(key string, value ByteView):void
+    + get(key string): (ByteView, bool)
+}
+
+class lruCache{
+    
+}
+
+class ByteView{
+  
+}
+
+class PeerPicker{
+    <<interface>>
+    + PickPeer(key string) : (PeerGetter, bool)
+}
+
+class PeerGetter{
+    <<interface>>
+    + Get(ctx context.Context, in *pb.Request, out *pb.Response) : error
+}
+
+class ConsistentHash{
+  
+}
+
+class SingleFlight{
+  
+}
+
+class HTTPPool{
+    
+}
+
+Getter ..> Sink
+Global ..> Getter
+Global o-- Group
+cache o-- lruCache
+cache ..> ByteView
+Group o-- cache
+Group o-- Getter
+Group o-- flightGroup
+Group o-- PeerPicker
+
+PeerPicker ..> PeerGetter
+
+HTTPPool ..|> PeerPicker
+HTTPPool o-- ConsistentHash
+
+SingleFlight ..|> flightGroup
+```
+
+## Technical Concepts
+- LRU Cache
+- Consistent Hash
+- SingleFlight
+- http.RoundTripper
+- gRPC
+
+
 ## Comparison to memcached
 
 ### **Like memcached**, groupcache:
