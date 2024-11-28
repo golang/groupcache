@@ -171,6 +171,10 @@ type Group struct {
 
 	// Stats are statistics on the group.
 	Stats Stats
+
+	// rand is only non-nil when testing,
+	// to get predictable results in TestPeers.
+	rand *rand.Rand
 }
 
 // flightGroup is defined as an interface which flightgroup.Group
@@ -315,7 +319,13 @@ func (g *Group) getFromPeer(ctx context.Context, peer ProtoGetter, key string) (
 	// TODO(bradfitz): use res.MinuteQps or something smart to
 	// conditionally populate hotCache.  For now just do it some
 	// percentage of the time.
-	if rand.Intn(10) == 0 {
+	var pop bool
+	if g.rand != nil {
+		pop = g.rand.Intn(10) == 0
+	} else {
+		pop = rand.Intn(10) == 0
+	}
+	if pop {
 		g.populateCache(key, value, &g.hotCache)
 	}
 	return value, nil

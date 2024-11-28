@@ -253,7 +253,6 @@ func (p fakePeers) PickPeer(key string) (peer ProtoGetter, ok bool) {
 // TestPeers tests that peers (virtual, in-process) are hit, and how much.
 func TestPeers(t *testing.T) {
 	once.Do(testSetup)
-	rand.Seed(123)
 	peer0 := &fakePeer{}
 	peer1 := &fakePeer{}
 	peer2 := &fakePeer{}
@@ -265,6 +264,7 @@ func TestPeers(t *testing.T) {
 		return dest.SetString("got:" + key)
 	}
 	testGroup := newGroup("TestPeers-group", cacheSize, GetterFunc(getter), peerList)
+	testGroup.rand = rand.New(rand.NewSource(123))
 	run := func(name string, n int, wantSummary string) {
 		// Reset counters
 		localHits = 0
