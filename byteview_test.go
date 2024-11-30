@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"testing"
 )
 
@@ -42,10 +41,10 @@ func TestByteView(t *testing.T) {
 			if n := v.Copy(shortDest[:]); n != min(len(s), 1) {
 				t.Errorf("%s: short Copy = %d; want %d", name, n, min(len(s), 1))
 			}
-			if got, err := ioutil.ReadAll(v.Reader()); err != nil || string(got) != s {
+			if got, err := io.ReadAll(v.Reader()); err != nil || string(got) != s {
 				t.Errorf("%s: Reader = %q, %v; want %q", name, got, err, s)
 			}
-			if got, err := ioutil.ReadAll(io.NewSectionReader(v, 0, int64(len(s)))); err != nil || string(got) != s {
+			if got, err := io.ReadAll(io.NewSectionReader(v, 0, int64(len(s)))); err != nil || string(got) != s {
 				t.Errorf("%s: SectionReader of ReaderAt = %q, %v; want %q", name, got, err, s)
 			}
 			var dest bytes.Buffer
