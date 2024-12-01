@@ -26,7 +26,7 @@ func TestHashing(t *testing.T) {
 
 	// Override the hash function to return easier to reason about values. Assumes
 	// the keys can be converted to an integer.
-	hash := New(3, func(key []byte) uint32 {
+	hash := NewConsistentHash(3, 6, func(key []byte) uint32 {
 		i, err := strconv.Atoi(string(key))
 		if err != nil {
 			panic(err)
@@ -66,8 +66,8 @@ func TestHashing(t *testing.T) {
 }
 
 func TestConsistency(t *testing.T) {
-	hash1 := New(1, nil)
-	hash2 := New(1, nil)
+	hash1 := NewConsistentHash(1, 6, nil)
+	hash2 := NewConsistentHash(1, 6, nil)
 
 	hash1.Add("Bill", "Bob", "Bonny")
 	hash2.Add("Bob", "Bonny", "Bill")
@@ -86,18 +86,24 @@ func TestConsistency(t *testing.T) {
 
 }
 
-func BenchmarkGet8(b *testing.B)   { benchmarkGet(b, 8) }
-func BenchmarkGet32(b *testing.B)  { benchmarkGet(b, 32) }
-func BenchmarkGet128(b *testing.B) { benchmarkGet(b, 128) }
-func BenchmarkGet512(b *testing.B) { benchmarkGet(b, 512) }
+func BenchmarkGet8(b *testing.B)   { benchmarkGet(b, 8, 6) }
+func BenchmarkGet32(b *testing.B)  { benchmarkGet(b, 32, 6) }
+func BenchmarkGet128(b *testing.B) { benchmarkGet(b, 128, 6) }
+func BenchmarkGet512(b *testing.B) { benchmarkGet(b, 512, 6) }
 
-func benchmarkGet(b *testing.B, shards int) {
+func benchmarkGet(b *testing.B, shards int, expansion int) {
 
-	hash := New(50, nil)
+	hash := NewConsistentHash(50, expansion, nil)
 
 	var buckets []string
 	for i := 0; i < shards; i++ {
 		buckets = append(buckets, fmt.Sprintf("shard-%d", i))
+	}
+
+	testStringCount := shards
+	var testStrings []string
+	for i := 0; i < testStringCount; i++ {
+		testStrings = append(testStrings, fmt.Sprintf("%d", i))
 	}
 
 	hash.Add(buckets...)
@@ -105,6 +111,6 @@ func benchmarkGet(b *testing.B, shards int) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		hash.Get(buckets[i&(shards-1)])
+		hash.Get(testStrings[i&(testStringCount-1)])
 	}
 }
