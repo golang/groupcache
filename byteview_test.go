@@ -139,6 +139,23 @@ func TestByteViewSlice(t *testing.T) {
 	}
 }
 
+func TestByteViewReadAt(t *testing.T) {
+	tests := []int64{
+		-1,
+		5,
+	}
+	bv := ByteView{b: []byte("xy")}
+	for i, tt := range tests {
+		if _, re := bv.ReadAt([]byte("ab"), tt); re == nil {
+			name := fmt.Sprintf("test %d", i)
+			t.Errorf("got nil; want error, for offset %d", name, tt)
+		}
+	}
+	if _, re := bv.ReadAt([]byte("abcd"), 0); re == nil {
+		t.Errorf("got nil; want error, when dest is larger")
+	}
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
