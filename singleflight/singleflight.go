@@ -25,6 +25,8 @@ type call struct {
 	wg  sync.WaitGroup
 	val interface{}
 	err error
+	// true if call has completed; guarded by (Once)Group.mu
+	complete bool
 }
 
 // Group represents a class of work and forms a namespace in which
@@ -59,6 +61,40 @@ func (g *Group) Do(key string, fn func() (interface{}, error)) (interface{}, err
 	g.mu.Lock()
 	delete(g.m, key)
 	g.mu.Unlock()
+
+	return c.val, c.err
+}
+
+// OnceGroup is like Group, but caches the results of calls.
+type OnceGroup struct {
+	mu sync.Mutex       // protects m
+	m  map[string]*call // lazily initialized
+}
+
+func (g *OnceGroup) Do(key string, fn func() (interface{}, error)) (interface{}, error) {
+	g.mu.Lock()
+	if g.m == nil {
+		g.m = make(map[string]*call)
+	}
+	if c, ok := g.m[key]; ok {
+		if c.complete {
+			g.mu.Unlock()
+			return c.val, c.err
+		}
+		g.mu.Unlock()
+		c.wg.Wait()
+		return c.val, c.err
+	}
+	c := new(call)
+	c.wg.Add(1)
+	g.m[key] = c
+	g.mu.Unlock()
+
+	c.val, c.err = fn()
+	g.mu.Lock()
+	c.complete = true
+	g.mu.Unlock()
+	c.wg.Done()
 
 	return c.val, c.err
 }
