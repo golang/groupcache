@@ -27,6 +27,7 @@ package groupcache
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -61,6 +62,7 @@ var (
 
 	initPeerServerOnce sync.Once
 	initPeerServer     func()
+	errLogHook         func(error)
 )
 
 // GetGroup returns the named group previously created with NewGroup, or
@@ -120,6 +122,20 @@ func RegisterNewGroupHook(fn func(*Group)) {
 		panic("RegisterNewGroupHook called more than once")
 	}
 	newGroupHook = fn
+}
+
+// RegisterErrLogHook registers a log func that is used for HTTP error logging.
+func RegisterErrLogHook(fn func(error)) {
+	if errLogHook != nil {
+		panic("RegisterErrLogHook called more than once")
+	}
+	errLogHook = fn
+}
+
+func logErr(err error) {
+	if errLogHook != nil {
+		errLogHook(err)
+	}
 }
 
 // RegisterServerStart registers a hook that is run when the first
@@ -276,10 +292,7 @@ func (g *Group) load(ctx context.Context, key string, dest Sink) (value ByteView
 				return value, nil
 			}
 			g.Stats.PeerErrors.Add(1)
-			// TODO(bradfitz): log the peer's error? keep
-			// log of the past few for /groupcachez?  It's
-			// probably boring (normal task movement), so not
-			// worth logging I imagine.
+			logErr(fmt.Errorf("%+v, %+v, %+v, %+v", ctx, peer, key, err))
 		}
 		value, err = g.getLocally(ctx, key, dest)
 		if err != nil {
