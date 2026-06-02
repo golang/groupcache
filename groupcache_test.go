@@ -453,5 +453,47 @@ func TestGroupStatsAlignment(t *testing.T) {
 	}
 }
 
+// TestGetCached tests that GetCached correctly reports cache hit/miss.
+func TestGetCached(t *testing.T) {
+	once.Do(testSetup)
+	g := newGroup("TestGetCached-group", 1<<20, GetterFunc(func(_ context.Context, key string, dest Sink) error {
+		return dest.SetString("val:" + key)
+	}), nil)
+
+	key := "cached-key"
+	var s string
+
+	// First call: cache miss.
+	cached, err := g.GetCached(dummyCtx, key, StringSink(&s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cached {
+		t.Error("first GetCached returned cached=true; want false")
+	}
+	if s != "val:cached-key" {
+		t.Errorf("got %q; want %q", s, "val:cached-key")
+	}
+
+	// Second call: should be a cache hit.
+	s = ""
+	cached, err = g.GetCached(dummyCtx, key, StringSink(&s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cached {
+		t.Error("second GetCached returned cached=false; want true")
+	}
+	if s != "val:cached-key" {
+		t.Errorf("got %q; want %q", s, "val:cached-key")
+	}
+
+	// Nil dest should return error.
+	_, err = g.GetCached(dummyCtx, "any", nil)
+	if err == nil {
+		t.Error("GetCached with nil dest should return error")
+	}
+}
+
 // TODO(bradfitz): port the Google-internal full integration test into here,
 // using HTTP requests instead of our RPC system.

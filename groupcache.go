@@ -210,16 +210,29 @@ func (g *Group) initPeers() {
 }
 
 func (g *Group) Get(ctx context.Context, key string, dest Sink) error {
+	_, err := g.getCached(ctx, key, dest)
+	return err
+}
+
+// GetCached acts like Get but additionally reports whether the
+// value was served from the local cache. This is useful for
+// callers that want to distinguish cache hits from cache misses
+// without relying on the Stats counters.
+func (g *Group) GetCached(ctx context.Context, key string, dest Sink) (cached bool, err error) {
+	return g.getCached(ctx, key, dest)
+}
+
+func (g *Group) getCached(ctx context.Context, key string, dest Sink) (cached bool, err error) {
 	g.peersOnce.Do(g.initPeers)
 	g.Stats.Gets.Add(1)
 	if dest == nil {
-		return errors.New("groupcache: nil dest Sink")
+		return false, errors.New("groupcache: nil dest Sink")
 	}
 	value, cacheHit := g.lookupCache(key)
 
 	if cacheHit {
 		g.Stats.CacheHits.Add(1)
-		return setSinkView(dest, value)
+		return true, setSinkView(dest, value)
 	}
 
 	// Optimization to avoid double unmarshalling or copying: keep
@@ -227,14 +240,14 @@ func (g *Group) Get(ctx context.Context, key string, dest Sink) error {
 	// (if local) will set this; the losers will not. The common
 	// case will likely be one caller.
 	destPopulated := false
-	value, destPopulated, err := g.load(ctx, key, dest)
+	value, destPopulated, err = g.load(ctx, key, dest)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if destPopulated {
-		return nil
+		return false, nil
 	}
-	return setSinkView(dest, value)
+	return false, setSinkView(dest, value)
 }
 
 // load loads key either by invoking the getter locally or by sending it to another machine.
