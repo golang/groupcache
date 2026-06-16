@@ -82,6 +82,17 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 	return
 }
 
+// Peek looks up a key's value without updating its recency.
+func (c *Cache) Peek(key Key) (value interface{}, ok bool) {
+	if c.cache == nil {
+		return
+	}
+	if ele, hit := c.cache[key]; hit {
+		return ele.Value.(*entry).value, true
+	}
+	return
+}
+
 // Remove removes the provided key from the cache.
 func (c *Cache) Remove(key Key) {
 	if c.cache == nil {

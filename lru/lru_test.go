@@ -73,6 +73,26 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+func TestPeek(t *testing.T) {
+	lru := New(2)
+	lru.Add("a", 1)
+	lru.Add("b", 2)
+
+	// Peeking "a" must not refresh its recency.
+	if val, ok := lru.Peek("a"); !ok || val != 1 {
+		t.Fatalf("Peek(a) = %v, %v; want 1, true", val, ok)
+	}
+	if _, ok := lru.Peek("missing"); ok {
+		t.Fatal("Peek(missing) reported a hit")
+	}
+
+	// Adding "c" should evict "a" as the least recently used.
+	lru.Add("c", 3)
+	if _, ok := lru.Get("a"); ok {
+		t.Fatal("Peek refreshed recency; oldest entry survived eviction")
+	}
+}
+
 func TestEvict(t *testing.T) {
 	evictedKeys := make([]Key, 0)
 	onEvictedFun := func(key Key, value interface{}) {
