@@ -27,15 +27,20 @@ package groupcache
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	pb "github.com/golang/groupcache/groupcachepb"
 	"github.com/golang/groupcache/lru"
 	"github.com/golang/groupcache/singleflight"
 )
+
+// hotQPS is the request rate, in requests per qpsWindow as seen by a key's
+// owner, above which non-owning peers begin mirroring the key into their
+// hotCache to shed load from the owner.
+const hotQPS = 10
 
 // A Getter loads data for a key.
 type Getter interface {
@@ -103,6 +108,7 @@ func newGroup(name string, cacheBytes int64, getter Getter, peers PeerPicker) *G
 		cacheBytes: cacheBytes,
 		loadGroup:  &singleflight.Group{},
 	}
+	g.mainCache.trackQPS = true
 	if fn := newGroupHook; fn != nil {
 		fn(g)
 	}
@@ -172,9 +178,16 @@ type Group struct {
 	// Stats are statistics on the group.
 	Stats Stats
 
-	// rand is only non-nil when testing,
-	// to get predictable results in TestPeers.
-	rand *rand.Rand
+	// now returns the current time. It is overridden in tests to make
+	// the QPS-driven hotCache population deterministic.
+	now func() time.Time
+}
+
+func (g *Group) timeNow() time.Time {
+	if g.now != nil {
+		return g.now()
+	}
+	return time.Now()
 }
 
 // flightGroup is defined as an interface which flightgroup.Group
@@ -215,6 +228,7 @@ func (g *Group) Get(ctx context.Context, key string, dest Sink) error {
 	if dest == nil {
 		return errors.New("groupcache: nil dest Sink")
 	}
+	g.mainCache.recordRequest(key, g.timeNow())
 	value, cacheHit := g.lookupCache(key)
 
 	if cacheHit {
@@ -316,16 +330,7 @@ func (g *Group) getFromPeer(ctx context.Context, peer ProtoGetter, key string) (
 		return ByteView{}, err
 	}
 	value := ByteView{b: res.Value}
-	// TODO(bradfitz): use res.MinuteQps or something smart to
-	// conditionally populate hotCache.  For now just do it some
-	// percentage of the time.
-	var pop bool
-	if g.rand != nil {
-		pop = g.rand.Intn(10) == 0
-	} else {
-		pop = rand.Intn(10) == 0
-	}
-	if pop {
+	if res.GetMinuteQps() >= hotQPS {
 		g.populateCache(key, value, &g.hotCache)
 	}
 	return value, nil
@@ -398,11 +403,22 @@ func (g *Group) CacheStats(which CacheType) CacheStats {
 // makes values always be ByteView, and counts the size of all keys and
 // values.
 type cache struct {
-	mu         sync.RWMutex
-	nbytes     int64 // of all keys and values
-	lru        *lru.Cache
+	mu     sync.RWMutex
+	nbytes int64 // of all keys and values
+	lru    *lru.Cache
+	// trackQPS records a per-key request rate for owner-side hotness
+	// reporting. It is enabled only on a group's mainCache.
+	trackQPS   bool
 	nhit, nget int64
 	nevict     int64 // number of evictions
+}
+
+// cacheValue is the value stored in the underlying LRU. Its optional stats
+// live and die with the entry, so per-key rate tracking is bounded by cache
+// residency and cleaned up by ordinary eviction.
+type cacheValue struct {
+	view  ByteView
+	stats *keyStats
 }
 
 func (c *cache) stats() CacheStats {
@@ -423,13 +439,17 @@ func (c *cache) add(key string, value ByteView) {
 	if c.lru == nil {
 		c.lru = &lru.Cache{
 			OnEvicted: func(key lru.Key, value interface{}) {
-				val := value.(ByteView)
-				c.nbytes -= int64(len(key.(string))) + int64(val.Len())
+				cv := value.(*cacheValue)
+				c.nbytes -= int64(len(key.(string))) + int64(cv.view.Len())
 				c.nevict++
 			},
 		}
 	}
-	c.lru.Add(key, value)
+	cv := &cacheValue{view: value}
+	if c.trackQPS {
+		cv.stats = &keyStats{}
+	}
+	c.lru.Add(key, cv)
 	c.nbytes += int64(len(key)) + int64(value.Len())
 }
 
@@ -445,7 +465,39 @@ func (c *cache) get(key string) (value ByteView, ok bool) {
 		return
 	}
 	c.nhit++
-	return vi.(ByteView), true
+	return vi.(*cacheValue).view, true
+}
+
+// recordRequest registers one request for key against its tracked rate, if the
+// key is present and tracked.
+func (c *cache) recordRequest(key string, now time.Time) {
+	c.stats0(key, now, true)
+}
+
+// peekQPS returns key's estimated requests-per-qpsWindow without registering a
+// new request, or 0 if the key is absent or untracked.
+func (c *cache) peekQPS(key string, now time.Time) float64 {
+	return c.stats0(key, now, false)
+}
+
+func (c *cache) stats0(key string, now time.Time, record bool) float64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.lru == nil {
+		return 0
+	}
+	vi, ok := c.lru.Peek(key)
+	if !ok {
+		return 0
+	}
+	stats := vi.(*cacheValue).stats
+	if stats == nil {
+		return 0
+	}
+	if record {
+		return stats.touch(now)
+	}
+	return stats.peek(now)
 }
 
 func (c *cache) removeOldest() {

@@ -174,7 +174,8 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Write the value to the response body as a proto message.
-	body, err := proto.Marshal(&pb.GetResponse{Value: value})
+	qps := group.mainCache.peekQPS(key, group.timeNow())
+	body, err := proto.Marshal(&pb.GetResponse{Value: value, MinuteQps: &qps})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

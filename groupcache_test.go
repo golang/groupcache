@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
-	"math/rand"
 	"reflect"
 	"sync"
 	"testing"
@@ -229,6 +228,7 @@ func TestCacheEviction(t *testing.T) {
 type fakePeer struct {
 	hits int
 	fail bool
+	qps  float64 // reported owner-side request rate
 }
 
 func (p *fakePeer) Get(_ context.Context, in *pb.GetRequest, out *pb.GetResponse) error {
@@ -237,6 +237,7 @@ func (p *fakePeer) Get(_ context.Context, in *pb.GetRequest, out *pb.GetResponse
 		return errors.New("simulated error from peer")
 	}
 	out.Value = []byte("got:" + in.GetKey())
+	out.MinuteQps = &p.qps
 	return nil
 }
 
@@ -264,7 +265,6 @@ func TestPeers(t *testing.T) {
 		return dest.SetString("got:" + key)
 	}
 	testGroup := newGroup("TestPeers-group", cacheSize, GetterFunc(getter), peerList)
-	testGroup.rand = rand.New(rand.NewSource(123))
 	run := func(name string, n int, wantSummary string) {
 		// Reset counters
 		localHits = 0
@@ -303,9 +303,21 @@ func TestPeers(t *testing.T) {
 	resetCacheSize(1 << 20)
 	run("base", 200, "localHits = 49, peers = 51 49 51")
 
-	// Verify cache was hit.  All localHits are gone, and some of
-	// the peer hits (the ones randomly selected to be maybe hot)
-	run("cached_base", 200, "localHits = 0, peers = 49 47 48")
+	// Peers report cold keys, so nothing is mirrored into hotCache.
+	// Locally-owned keys are served from mainCache (no local hits),
+	// but peer-owned keys still require a peer fetch every time.
+	run("cached_base", 200, "localHits = 0, peers = 51 49 51")
+
+	// Peers now report hot keys, so peer-owned keys are mirrored into
+	// hotCache on this pass...
+	for _, p := range []*fakePeer{peer0, peer1, peer2} {
+		p.qps = hotQPS
+	}
+	run("warm_hot", 200, "localHits = 0, peers = 51 49 51")
+
+	// ...and the subsequent pass serves them all from hotCache.
+	run("cached_hot", 200, "localHits = 0, peers = 0 0 0")
+
 	resetCacheSize(0)
 
 	// With one of the peers being down.
