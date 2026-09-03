@@ -73,6 +73,22 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+func TestAddDuplicateCallsOnEvicted(t *testing.T) {
+	var got []Key
+	lru := New(0)
+	lru.OnEvicted = func(key Key, value interface{}) {
+		got = append(got, key)
+	}
+	lru.Add("k", 1)
+	lru.Add("k", 2)
+	if len(got) != 1 || got[0] != Key("k") {
+		t.Fatalf("OnEvicted = %v, want [k]", got)
+	}
+	if v, ok := lru.Get("k"); !ok || v != 2 {
+		t.Fatalf("Get = %v, %v; want 2, true", v, ok)
+	}
+}
+
 func TestEvict(t *testing.T) {
 	evictedKeys := make([]Key, 0)
 	onEvictedFun := func(key Key, value interface{}) {
