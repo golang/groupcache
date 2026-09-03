@@ -59,8 +59,12 @@ func (c *Cache) Add(key Key, value interface{}) {
 		c.ll = list.New()
 	}
 	if ee, ok := c.cache[key]; ok {
+		old := ee.Value.(*entry)
+		if c.OnEvicted != nil {
+			c.OnEvicted(old.key, old.value)
+		}
 		c.ll.MoveToFront(ee)
-		ee.Value.(*entry).value = value
+		old.value = value
 		return
 	}
 	ele := c.ll.PushFront(&entry{key, value})
